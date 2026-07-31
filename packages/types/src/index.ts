@@ -49,3 +49,8 @@ export interface AuthToken {
   aceesToken: string;
   refreshToken: string;
 }
+
+export interface JwtPayload {
+  sub: string;
+  email: string;
+}
