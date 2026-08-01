@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { authServerSchema } from "./server.schema";
 import { AUTH_INTENT } from "./constants";
+import { applyAuthCookiesFromResponse } from "./cookies";
 
 export type AuthActionState = {
   error?: string;
@@ -61,5 +62,6 @@ export async function authAction(
     }
   }
 
+  await applyAuthCookiesFromResponse(res);
   redirect("/dashboard");
 }
