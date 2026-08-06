@@ -15,6 +15,20 @@
       "when": 1785665702207,
       "tag": "0001_clear_captain_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786005835886,
+      "tag": "0002_good_demogoblin",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786006764286,
+      "tag": "0003_unusual_arachne",
+      "breakpoints": true
     }
   ]
 }

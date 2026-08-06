@@ -10,10 +10,10 @@ export const projects = pgTable('projects', {
   slug: text('slug').notNull().unique(),
   dbSchema: text('db_schema').notNull().unique(),
   projectUrl: text('project_url').notNull().unique(),
-  annonKey: text('annon_key').notNull(),
   serviceRoleKey: text('service_role_key').notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  anonKey: text('anon_key').notNull(),
 });
 
 export type Project = typeof projects.$inferSelect;

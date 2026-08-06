@@ -65,24 +65,29 @@ export interface OrganizationWithMeta extends Organization {
   role: OrgRole;
 }
 
-
-export interface OrgMemberWithUser{
-  id : string ; 
-  role : string ;
-  createdAt : string ;
-  user : {
-    id : string ;
-    name : string | null;
-    email : string ;
-    avatarUrl : string | null
+export interface OrgMemberWithUser {
+  id: string;
+  role: string;
+  createdAt: string;
+  user: {
+    id: string;
+    name: string | null;
+    email: string;
+    avatarUrl: string | null;
   };
 }
 
 export interface InviteMemberInput {
-  email : string;
+  email: string;
 }
 
-export interface UpdateRoleInput { 
-  role : OrgRole;
+export interface UpdateRoleInput {
+  role: OrgRole;
 }
 
+export interface CreateProjectInput {
+  name: string;
+}
+export interface ProjectWithOrg extends Project {
+  org: Pick<Organization, "id" | "name" | "slug">;
+}
