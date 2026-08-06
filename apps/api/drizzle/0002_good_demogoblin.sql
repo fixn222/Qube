@@ -1,0 +1,1 @@
+ALTER TABLE "projects" ADD COLUMN "anon_key" text NOT NULL;
