@@ -1,0 +1,1 @@
+ALTER TABLE "org_members" ADD COLUMN "removed_at" timestamp;

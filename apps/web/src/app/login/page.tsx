@@ -23,12 +23,15 @@ import { Input } from "@/components/ui/input";
 import { authAction } from "@/features/auth/action";
 import { AUTH_INTENT } from "@/features/auth/constants";
 import { loginSchema } from "@/features/auth/client.schema";
+import { retriveTokenFromCookies } from "@/server-utils/utils";
+// import { proxy } from "@/poxy";
 
 type LoginFormValue = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const [state, formAction, isPending] = useActionState(authAction, {});
-
+  // const token = await retriveTokenFromCookies(); 
+  // console.log(token)
   const form = useForm<LoginFormValue>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },

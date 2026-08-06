@@ -3,7 +3,7 @@ import { LoginInput } from '@qube/types';
 
 export class LogInDto implements LoginInput {
   @IsEmail()
-  email: string;
+  email!: string;
   @IsString()
-  password: string;
+  password!: string;
 }
