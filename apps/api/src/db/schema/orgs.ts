@@ -22,6 +22,8 @@ export const orgMembers = pgTable('org_members', {
   role: orgRoleEnum('role').notNull().default('developer'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+
+  removedAt: timestamp('removed_at'),
 });
 
 export type Organizations = typeof organizations.$inferSelect;

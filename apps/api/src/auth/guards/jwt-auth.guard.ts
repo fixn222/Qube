@@ -18,22 +18,22 @@ export class JwtAuthGuard implements CanActivate {
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const req = context.switchToHttp().getRequest<Request>();
+    const request = context.switchToHttp().getRequest<Request>();
 
-    const token = req.cookies?.[COOKIE_KEYS.ACCESS_TOKEN] as string | undefined;
+    const token = request.cookies?.[COOKIE_KEYS.ACCESS_TOKEN] as
+      string | undefined;
 
     if (!token) {
       throw new UnauthorizedException('Not authenticated');
     }
 
     try {
-      const payload = this.jwtService.verify<JwtPayload>('token', {
-        secret: this.configService.get<string>('JWT_ACCESS_TOKEN'),
+      const payload = this.jwtService.verify<JwtPayload>(token, {
+        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
       });
-
-      req['user'] = payload;
+      request['user'] = payload;
       return true;
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException('Invalid or expired token');
     }
   }

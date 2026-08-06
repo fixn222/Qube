@@ -19,12 +19,14 @@ import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { LogInDto } from './dto/login.dto';
+import { InviteService } from 'src/members/invite.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private authService: AuthService,
     private configService: ConfigService,
+    private inviteService : InviteService ,
   ) {}
 
   @Post('register')
@@ -98,6 +100,12 @@ export class AuthController {
   async githubCallback(@Query('code') code: string, @Res() res: Response) {
     const tokens = await this.authService.handleGithubCallback(code);
     this.authService.setTokenCookies(res, tokens);
+    return res.redirect(`${this.configService.get('WEB_URL')}/dashboard`);
+  }
+
+  @Get('invite/accept')
+  async acceptInvite(@Query('token') token : string , @Res() res : Response){
+    await this.inviteService.acceptInvite(token)
     return res.redirect(`${this.configService.get('WEB_URL')}/dashboard`);
   }
 }

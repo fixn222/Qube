@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AppSidebar } from "../../templates/app-sidebar";
 
 const page = () => {
   const [status, setStatus] = useState("checking....");
@@ -17,6 +18,8 @@ const page = () => {
       <h1 className="text-4xl font-bold ">Qube</h1>
 
       <p className="mt-4 text-gray-500">API STATUS : {status}</p>
+
+      {/* <AppSidebar /> */}
     </main>
   );
 };
