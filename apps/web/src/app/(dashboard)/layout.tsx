@@ -30,7 +30,7 @@ export default async function DashboardLayout({
   <SidebarProvider>
       <AppSidebar orgs={orgs} user={user} />
       <SidebarInset>
-        {/* <TopNav projects={}/> */}
+        {/* <TopNav/> */}
        {children}
       </SidebarInset>
     </SidebarProvider>
