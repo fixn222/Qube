@@ -60,6 +60,8 @@ export async function membersAction(
                 )
                 revalidatePath(`/organizations/${slug}/settings/members`);
 
+                    console.log(intent)
+
                 return {success : 'Role updated'}
 
             }

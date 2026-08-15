@@ -7,13 +7,15 @@ import { AuthModule } from './auth/auth.module';
 import { OrgsModule } from './orgs/org.module';
 import { MembersModule } from './members/members.module';
 import { ProjectsModule } from './projects/projects.module';
+import { TableEditorModule } from './table-editor/table-editor.module';
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }),
     DbModule,
     AuthModule,
     OrgsModule,
     MembersModule ,
-  ProjectsModule
+  ProjectsModule ,
+  TableEditorModule
   ],
   controllers: [AppController],
   providers: [AppService],

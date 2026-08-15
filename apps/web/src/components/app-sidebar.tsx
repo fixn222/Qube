@@ -37,6 +37,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { signOut } from "@/features/auth/signout";
 import { OrganizationWithMeta } from "@qube/types";
+import { ThemeToggle } from "./theme-toogle";
 
 const navItems = [
   { icon: Home, label: "Home", segment: "projects" },
@@ -82,6 +83,7 @@ export function AppSidebar({ orgs, user }: AppSidebarProps) {
                 className="w-[--radix-popper-anchor-width]"
                 align="start"
               >
+              <ThemeToggle/>
                {orgs.map((org) => (
                  <DropdownMenuItem asChild>
                   <Link
