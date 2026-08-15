@@ -4,7 +4,8 @@
   "scripts": {
     "dev:api": "pnpm --filter api run start:dev",
     "dev:web": "pnpm --filter web run dev",
-    "dev": "concurrently \"pnpm run dev:api \" \"pnpm run dev:web\" "
+    "dev": "concurrently \"pnpm run dev:api \" \"pnpm run dev:web\" " ,
+    "deploy:web": "pnpm --filter web exec wrangler deploy"
   },
   "devDependencies": {
     "concurrently": "^10.0.4"
