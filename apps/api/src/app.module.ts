@@ -8,16 +8,19 @@ import { OrgsModule } from './orgs/org.module';
 import { MembersModule } from './members/members.module';
 import { ProjectsModule } from './projects/projects.module';
 import { TableEditorModule } from './table-editor/table-editor.module';
+import { ProjectApiModule } from './project-api/project-api.module';
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }),
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
     DbModule,
     AuthModule,
     OrgsModule,
-    MembersModule ,
-  ProjectsModule ,
-  TableEditorModule
+    MembersModule,
+    ProjectsModule,
+    TableEditorModule,
+    ProjectApiModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}

@@ -15,6 +15,7 @@ export const orgMembers = pgTable('org_members', {
   id: uuid().defaultRandom().primaryKey(),
   orgId: uuid('org_id')
     .notNull()
+    
     .references(() => organizations.id, { onDelete: 'cascade' }),
   userId: uuid('user_id')
     .notNull()
