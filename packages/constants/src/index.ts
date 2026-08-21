@@ -40,3 +40,28 @@ export const TABLE_EDITOR_INTENT = {
 } as const;
 
 export type TableEditorIntent = (typeof TABLE_EDITOR_INTENT)[keyof typeof TABLE_EDITOR_INTENT]
+
+
+export const RESERVED_QUERY_PARAMS = new Set([
+  'select' ,
+  'order' ,
+  'limit' ,
+  'offset' 
+]);
+
+export const FILLTER_OPERATORS = {
+  eq : '=' ,
+  neq : '!=' ,
+  gt : '>' ,
+  gte : '>=' ,
+  lt : '<' ,
+  lte : '<=' ,
+  like : 'LIKE' ,
+  ilike : 'ILIKE' ,
+  is : 'IS' 
+}as const ;
+
+export type FillterOperator = keyof typeof FILLTER_OPERATORS;
+
+
+

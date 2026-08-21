@@ -14,6 +14,7 @@ import {
   Plus,
   Check,
   LogOut,
+  TerminalIcon,
 } from "lucide-react";
 import {
   Sidebar,
@@ -26,6 +27,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  SidebarSeparator,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -36,28 +38,94 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { signOut } from "@/features/auth/signout";
+import { cn } from "@/lib/utils";
 import { OrganizationWithMeta } from "@qube/types";
-import { ThemeToggle } from "./theme-toogle";
 
-const navItems = [
-  { icon: Home, label: "Home", segment: "projects" },
+const orgNavItem = { icon: Home, label: "Home", segment: "projects" } as const;
+
+const projectNavItems = [
   { icon: Table2, label: "Database", segment: "database" },
+  { icon: TerminalIcon, label: "SQL", segment: "sql" },
   { icon: ShieldCheck, label: "Auth", segment: "auth" },
   { icon: FolderOpen, label: "Storage", segment: "storage" },
   { icon: Code2, label: "API", segment: "api" },
   { icon: Radio, label: "Realtime", segment: "realtime" },
-];
+] as const;
+
+function buildNavHref(
+  orgSlug: string | undefined,
+  projectSlug: string | undefined,
+  segment: string,
+  scope: "org" | "project",
+): string {
+  if (!orgSlug) return "/organizations";
+
+  if (scope === "org") {
+    return `/organizations/${orgSlug}/projects`;
+  }
+
+  if (projectSlug) {
+    return `/organizations/${orgSlug}/${projectSlug}/${segment}`;
+  }
+
+  return `/organizations/${orgSlug}/projects`;
+}
+
+function isNavItemActive(
+  pathname: string,
+  orgSlug: string | undefined,
+  projectSlug: string | undefined,
+  segment: string,
+  scope: "org" | "project",
+): boolean {
+  if (!orgSlug) return false;
+
+  if (scope === "org") {
+    return pathname === `/organizations/${orgSlug}/projects`;
+  }
+
+  if (!projectSlug) return false;
+
+  const base = `/organizations/${orgSlug}/${projectSlug}/${segment}`;
+  return pathname === base || pathname.startsWith(`${base}/`);
+}
+
+function navLinkClass(isActive: boolean) {
+  return cn(
+    "bg-transparent text-muted-foreground shadow-none",
+    "hover:bg-muted/60 hover:text-foreground",
+    isActive && "bg-muted font-medium text-foreground hover:bg-muted",
+  );
+}
+
 interface AppSidebarProps {
   orgs: OrganizationWithMeta[];
   user: { email: string; name: string | null };
 }
+
 export function AppSidebar({ orgs, user }: AppSidebarProps) {
   const pathname = usePathname();
-  const params = useParams<{ slug: string }>();
+  const params = useParams<{ slug: string; projectSlug?: string }>();
   const currentOrg = orgs.find((org) => org.slug === params?.slug) ?? orgs[0];
+  const orgSlug = params?.slug;
+  const projectSlug = params?.projectSlug;
+
+  const homeHref = buildNavHref(
+    orgSlug,
+    projectSlug,
+    orgNavItem.segment,
+    "org",
+  );
+  const isHomeActive = isNavItemActive(
+    pathname,
+    orgSlug,
+    projectSlug,
+    orgNavItem.segment,
+    "org",
+  );
+
   return (
     <Sidebar collapsible="icon">
-      {/* ── Header — org switcher ─────────────────────────────────── */}
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -73,7 +141,7 @@ export function AppSidebar({ orgs, user }: AppSidebarProps) {
                   <div className="flex flex-col gap-0.5 leading-none">
                     <span className="font-semibold">{currentOrg?.name}</span>
                     <span className="text-xs text-muted-foreground capitalize">
-                      admin
+                      {currentOrg?.role}
                     </span>
                   </div>
                   <ChevronsUpDown className="ml-auto" />
@@ -83,18 +151,17 @@ export function AppSidebar({ orgs, user }: AppSidebarProps) {
                 className="w-[--radix-popper-anchor-width]"
                 align="start"
               >
-              <ThemeToggle/>
-               {orgs.map((org) => (
-                 <DropdownMenuItem asChild>
-                  <Link
-                    href={`/organizations/${org.slug}/projects`}
-                    className="flex items-center justify-between"
-                  >
-                    <span>{org.name}</span>
-                    {params?.slug && <Check size={14} />}
-                  </Link>
-                </DropdownMenuItem>
-               ))}
+                {orgs.map((org) => (
+                  <DropdownMenuItem key={org.id} asChild>
+                    <Link
+                      href={`/organizations/${org.slug}/projects`}
+                      className="flex items-center justify-between"
+                    >
+                      <span>{org.name}</span>
+                      {org.slug === params?.slug && <Check size={14} />}
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href="/organizations">All organizations</Link>
@@ -114,26 +181,50 @@ export function AppSidebar({ orgs, user }: AppSidebarProps) {
         </SidebarMenu>
       </SidebarHeader>
 
-      {/* ── Content — nav items ───────────────────────────────────── */}
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems.map(({ icon: Icon, label, segment }) => {
-                const href = params?.slug
-                  ? `/organizations/${params.slug}/${segment}`
-                  : "/organizations";
-                const isActive = pathname === href;
+            <SidebarMenu className="gap-1 px-0 py-1">
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={false}
+                  tooltip={orgNavItem.label}
+                  className={navLinkClass(isHomeActive)}
+                >
+                  <Link href={homeHref}>
+                    <orgNavItem.icon />
+                    <span>{orgNavItem.label}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarSeparator className="my-2 group-data-[collapsible=icon]:hidden" />
+
+              {projectNavItems.map(({ icon: Icon, label, segment }) => {
+                const href = buildNavHref(
+                  orgSlug,
+                  projectSlug,
+                  segment,
+                  "project",
+                );
+                const isActive = isNavItemActive(
+                  pathname,
+                  orgSlug,
+                  projectSlug,
+                  segment,
+                  "project",
+                );
 
                 return (
-                  <SidebarMenuItem key={label} className="mt-2">
+                  <SidebarMenuItem key={label}>
                     <SidebarMenuButton
                       asChild
-                      isActive={isActive}
+                      isActive={false}
                       tooltip={label}
-                      
+                      className={navLinkClass(isActive)}
                     >
-                      <Link href={href} >
+                      <Link href={href}>
                         <Icon />
                         <span>{label}</span>
                       </Link>
@@ -146,7 +237,6 @@ export function AppSidebar({ orgs, user }: AppSidebarProps) {
         </SidebarGroup>
       </SidebarContent>
 
-      {/* ── Footer — user menu ────────────────────────────────────── */}
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -162,7 +252,9 @@ export function AppSidebar({ orgs, user }: AppSidebarProps) {
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col gap-0.5 leading-none">
-                    <span className="font-semibold">Account</span>
+                    <span className="font-semibold">
+                      {user.name ?? "Account"}
+                    </span>
                     <span className="text-xs text-muted-foreground truncate">
                       {user.email}
                     </span>
@@ -176,7 +268,11 @@ export function AppSidebar({ orgs, user }: AppSidebarProps) {
                 align="start"
               >
                 <DropdownMenuItem asChild>
-                  <Link href="/settings">Settings</Link>
+                  <Link
+                    href={`/organizations/${orgSlug ?? currentOrg?.slug}/settings/members`}
+                  >
+                    Settings
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
