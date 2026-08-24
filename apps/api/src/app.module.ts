@@ -9,6 +9,7 @@ import { MembersModule } from './members/members.module';
 import { ProjectsModule } from './projects/projects.module';
 import { TableEditorModule } from './table-editor/table-editor.module';
 import { ProjectApiModule } from './project-api/project-api.module';
+import { SqlEditorModule } from './sql-editor/sql-editor.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -19,6 +20,7 @@ import { ProjectApiModule } from './project-api/project-api.module';
     ProjectsModule,
     TableEditorModule,
     ProjectApiModule,
+    SqlEditorModule 
   ],
   controllers: [AppController],
   providers: [AppService],
