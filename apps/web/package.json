@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",
+    "@monaco-editor/react": "^4.7.0",
     "@qube/constants": "workspace:*",
     "@qube/types": "workspace:*",
     "@tanstack/react-table": "^8.21.3",
@@ -26,7 +27,7 @@
     "react-hook-form": "^7.85.0",
     "react-resizable-panels": "^4.12.2",
     "tailwind-merge": "^3.6.0",
-    "zod": "^4.4.3" 
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
@@ -40,5 +41,4 @@
     "typescript": "^5.9.3",
     "wrangler": "^4.123.0"
   }
-  
 }
