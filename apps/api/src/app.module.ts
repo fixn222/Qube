@@ -10,6 +10,7 @@ import { ProjectsModule } from './projects/projects.module';
 import { TableEditorModule } from './table-editor/table-editor.module';
 import { ProjectApiModule } from './project-api/project-api.module';
 import { SqlEditorModule } from './sql-editor/sql-editor.module';
+import { RealtimeModule } from './real-time/realtime.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -20,7 +21,8 @@ import { SqlEditorModule } from './sql-editor/sql-editor.module';
     ProjectsModule,
     TableEditorModule,
     ProjectApiModule,
-    SqlEditorModule 
+    SqlEditorModule,
+    RealtimeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

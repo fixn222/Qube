@@ -176,3 +176,23 @@ export interface QueryHistorItem {
   rowCount: number;
   createdAt: string;
 }
+
+
+export type RealtimeEventType = 'INSTERT' | 'UPDATE' | 'DELETE' ;
+
+export interface RealtimeEvent {
+  type : RealtimeEventType ;
+  table : string ;
+  record : Record<string , unknown> ;
+  oldRecord? : Record<string , unknown> ;
+  projectId : string ;
+  timeStamp : string; 
+}
+
+
+
+
+
+
+
+
