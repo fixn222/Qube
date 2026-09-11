@@ -134,13 +134,14 @@ export class ProjectApiService {
 
     entries.forEach(([col]) => this.assertSafeIdentifier(col, 'column name'));
 
-    const column = entries.map(([c]) => `"${c}"`).join(', ');
+    const columns = entries.map(([c]) => `"${c}"`).join(', ');
 
-    const values = entries.map(([, v]) => this.formateliteral(v)).join('. ');
-
-    const sql = `INSERT INTO "${schema}"."${tableName}" (${column})
-    VALUES (${values}) 
-    RETURNING *`;
+    const values = entries.map(([, v]) => this.formateliteral(v)).join(', ');
+    const sql = `
+      INSERT INTO "${schema}"."${tableName}" (${columns})
+      VALUES (${values})
+      RETURNING *
+    `;
 
     const result = await this.drizzle.db.execute<Record<string, unknown>>(sql);
 
