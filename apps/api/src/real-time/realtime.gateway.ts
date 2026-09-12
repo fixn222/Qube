@@ -89,13 +89,20 @@ export class RealtimeGateway
   async handleSubscribe(
     @ConnectedSocket() client: RealtimeSocket,
     @MessageBody() tableName: string,
-  ) {
+  ): Promise<void> {
     const projectId = client.data.projectId;
 
-    const normalizedTable = tableName.trim();
-    const room = `project: ${projectId}:table:${normalizedTable}`;
+    if (
+      !projectId ||
+      !tableName ||
+      typeof tableName !== 'string' ||
+      !tableName.trim()
+    ) {
+      return;
+    }
 
-    if (!projectId || tableName?.trim()) return;
+    const normalizedTable = tableName.trim();
+    const room = `project:${projectId}:table:${normalizedTable}`;
 
     const existing = this.socketCallbacks.get(client.id) ?? [];
 
@@ -111,7 +118,7 @@ export class RealtimeGateway
     await client.join(room);
 
     const callback = (event: RealtimeEvent) => {
-      this.server.to(room).emit(REALTME_EVENT.EVENT, event);
+      client.emit(REALTME_EVENT.EVENT, event);
     };
     await this.realtimeService.subscribe(
       projectId,
@@ -135,7 +142,14 @@ export class RealtimeGateway
   ) {
     const projectId = client.data.projectId;
 
-    if (!projectId || !tableName?.trim()) return;
+    if (
+      !projectId ||
+      !tableName ||
+      typeof tableName !== 'string' ||
+      !tableName.trim()
+    ) {
+      return;
+    }
 
     const normalizedTable = tableName.trim();
     const room = `project:${projectId}:table:${normalizedTable}`;

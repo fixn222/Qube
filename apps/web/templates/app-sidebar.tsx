@@ -53,7 +53,7 @@ interface AppSidebarProps {
 export function AppSidebar({ orgs, user }: AppSidebarProps) {
   const pathname = usePathname();
   const params = useParams<{ slug: string }>();
-  const currentOrg = orgs.find((org => org.slug === params?.slug) ?? orgs[0];
+  const currentOrg = orgs.find((org) => org.slug === params?.slug) ?? orgs[0];
   return (
     <Sidebar collapsible="icon">
       {/* ── Header — org switcher ─────────────────────────────────── */}

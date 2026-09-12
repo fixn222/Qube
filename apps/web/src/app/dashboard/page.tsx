@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation"
 import { retriveMyOrgsFromApi } from "@/features/organization/organization-helpers"
-import { AppSidebar } from "../../../templates/app-sidebar";
 
 export default async function DashBoardPage  ()  {
 

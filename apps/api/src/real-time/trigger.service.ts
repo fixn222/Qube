@@ -77,13 +77,12 @@ export class TrigerService {
 `);
 
     await this.drizzle.db.execute(`
-
-        CREATE TRIGGER "${tableName}_realtime_trigger"
-        AFTER INSTERT OR UPDATE OR DELETE 
-        ON "${dbSchema}"."${tableName}"
-        FOR EACH ROW 
-        EXECUTE FUNCTION "${dbSchema}"."${fnName}"();
-`);
+      CREATE TRIGGER "${tableName}_realtime_trigger"
+      AFTER INSERT OR UPDATE OR DELETE
+      ON "${dbSchema}"."${tableName}"
+      FOR EACH ROW
+      EXECUTE FUNCTION "${dbSchema}"."${fnName}"();
+    `);
   }
 
   async disableRealTime(dbSchema: string, tableName: string): Promise<void> {

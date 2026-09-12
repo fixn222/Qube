@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AppSidebar } from "../../templates/app-sidebar";
 
 const page = () => {
   const [status, setStatus] = useState("checking....");

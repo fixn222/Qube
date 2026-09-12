@@ -3,8 +3,9 @@ import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RealtimeEvent } from '@qube/types';
 import { TrigerService } from './trigger.service';
+import ws from 'ws';
 
-neonConfig.webSocketConstructor = WebSocket;
+neonConfig.webSocketConstructor = ws;
 
 type NotifyCallBack = (event: RealtimeEvent) => void;
 
@@ -30,7 +31,7 @@ export class RealtimeService implements OnModuleDestroy {
       throw new Error(`DATABASE_URL not configured `);
     }
 
-    let clean = url.replace('_pooler', '').trim();
+    let clean = url.replace('-pooler', '').trim();
     clean = clean.replace(/([?&])(sslmode|channel_binding)=[^&]*/g, '$1');
     clean = clean.replace(/[?&]$/, '').replace(/\?&/, '?');
     return clean;
@@ -57,6 +58,10 @@ export class RealtimeService implements OnModuleDestroy {
 
     await client.connect();
 
+    client.on('error', (err) => {
+      console.error(`Postgres realtime client error on ${channel}:`, err);
+    });
+
     client.on('notification', (msg) => {
       if (!msg.payload) {
         return;
@@ -66,7 +71,16 @@ export class RealtimeService implements OnModuleDestroy {
         const event = JSON.parse(msg.payload) as RealtimeEvent;
         const entry = this.listners.get(channel);
         entry?.callback.forEach((cb) => cb(event));
-      } catch {}
+      } catch (err) {
+        console.error(`Failed to parse notification payload on ${channel}:`, err);
+      }
+    });
+
+    await client.query(`LISTEN "${channel}"`);
+
+    this.listners.set(channel, {
+      client,
+      callback: new Set([callback]),
     });
   }
 
@@ -82,7 +96,7 @@ export class RealtimeService implements OnModuleDestroy {
     entry.callback.delete(callback);
 
     if (entry.callback.size === 0) {
-      void entry.client.query(`UNLISTEN ${channel}`).finally(() => {
+      void entry.client.query(`UNLISTEN "${channel}"`).finally(() => {
         void entry.client.end();
       });
       this.listners.delete(channel);
