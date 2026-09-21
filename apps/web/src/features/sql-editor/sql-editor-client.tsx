@@ -15,7 +15,7 @@ import {
   TableCell,
   TableHead,
   TableHeader,
-  TableRow,
+  TableRow
 } from '@/components/ui/table';
 import { Play, Clock, History, X } from 'lucide-react';
 import type { QueryResult, QueryHistorItem } from '@qube/types';
