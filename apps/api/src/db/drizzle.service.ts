@@ -10,7 +10,8 @@ export class DrizzleService implements OnModuleInit {
   constructor(private config: ConfigService) {}
 
   onModuleInit() {
-    const databaseUrl = this.config.get<string>('DATABASE_URL')!;
+    const databaseUrl = this.config.getOrThrow<string>('DATABASE_URL');
+
     this.db = drizzle(databaseUrl, { schema });
   }
 }

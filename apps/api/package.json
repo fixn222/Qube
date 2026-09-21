@@ -47,6 +47,7 @@
     "slugify": "^1.6.9",
     "socket.io": "^4.8.3",
     "socket.oi": "0.0.1-security.8",
+    "uploadthing": "^7.7.4",
     "ws": "^8.21.3"
   },
   "devDependencies": {

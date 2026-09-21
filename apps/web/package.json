@@ -14,6 +14,7 @@
     "@qube/constants": "workspace:*",
     "@qube/types": "workspace:*",
     "@tanstack/react-table": "^8.21.3",
+    "@uploadthing/react": "^7.3.3",
     "axios": "^1.19.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -28,6 +29,7 @@
     "react-resizable-panels": "^4.12.2",
     "socket.io-client": "^4.8.3",
     "tailwind-merge": "^3.6.0",
+    "uploadthing": "^7.7.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {

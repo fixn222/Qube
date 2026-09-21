@@ -165,7 +165,7 @@ export interface QueryResult {
   columns: string[];
   rowCount: number;
   executionTimeMs: number;
-  command? : string
+  command?: string;
 }
 
 export interface QueryHistorItem {
@@ -177,8 +177,7 @@ export interface QueryHistorItem {
   createdAt: string;
 }
 
-
-export type RealtimeEventType = 'INSERT' | 'UPDATE' | 'DELETE';
+export type RealtimeEventType = "INSERT" | "UPDATE" | "DELETE";
 
 export interface RealtimeEvent {
   type: RealtimeEventType;
@@ -190,10 +189,27 @@ export interface RealtimeEvent {
   timeStamp?: string;
 }
 
+export type BucketAccess = "public" | "private";
 
+export interface StorageBucket {
+  id: string;
+  projectId: string;
+  name: string;
+  access: string;
+  createdAt: string;
+}
 
-
-
-
-
-
+export interface StorageObject {
+  id: string;
+  bucketId: string;
+  size: number;
+  name: string;
+  mimeType: string;
+  utKey: string;
+  url: string;
+  cratedAt: string;
+}
+export interface CreatedBucketInput {
+  name: string;
+  access: BucketAccess;
+}
