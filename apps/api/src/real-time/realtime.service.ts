@@ -18,6 +18,7 @@ export class RealtimeService implements OnModuleDestroy {
       callback: Set<NotifyCallBack>;
     }
   >();
+  private pendingListners = new Map<string, Promise<void>>();
 
   constructor(private config: ConfigService) {}
 
@@ -52,36 +53,66 @@ export class RealtimeService implements OnModuleDestroy {
       return;
     }
 
+    const pending = this.pendingListners.get(channel);
+    if (pending) {
+      await pending;
+      const ready = this.listners.get(channel);
+      if (ready) {
+        ready.callback.add(callback);
+        return;
+      }
+    }
+
+    const setup = this.startListener(channel, callback);
+    this.pendingListners.set(channel, setup);
+    try {
+      await setup;
+    } finally {
+      if (this.pendingListners.get(channel) === setup) {
+        this.pendingListners.delete(channel);
+      }
+    }
+  }
+
+  private async startListener(
+    channel: string,
+    callback: NotifyCallBack,
+  ): Promise<void> {
     const client = new Client({
       connectionString: this.getListenConnectionString(),
     });
 
-    await client.connect();
+    try {
+      await client.connect();
 
-    client.on('error', (err) => {
-      console.error(`Postgres realtime client error on ${channel}:`, err);
-    });
+      client.on('error', (err) => {
+        console.error(`Postgres realtime client error on ${channel}:`, err);
+      });
 
-    client.on('notification', (msg) => {
-      if (!msg.payload) {
-        return;
-      }
+      client.on('notification', (msg) => {
+        if (!msg.payload) {
+          return;
+        }
 
-      try {
-        const event = JSON.parse(msg.payload) as RealtimeEvent;
-        const entry = this.listners.get(channel);
-        entry?.callback.forEach((cb) => cb(event));
-      } catch (err) {
-        console.error(`Failed to parse notification payload on ${channel}:`, err);
-      }
-    });
+        try {
+          const event = JSON.parse(msg.payload) as RealtimeEvent;
+          const entry = this.listners.get(channel);
+          entry?.callback.forEach((cb) => cb(event));
+        } catch (err) {
+          console.error(`Failed to parse notification payload on ${channel}:`, err);
+        }
+      });
 
-    await client.query(`LISTEN "${channel}"`);
+      await client.query(`LISTEN "${channel}"`);
 
-    this.listners.set(channel, {
-      client,
-      callback: new Set([callback]),
-    });
+      this.listners.set(channel, {
+        client,
+        callback: new Set([callback]),
+      });
+    } catch (error) {
+      await client.end().catch(() => undefined);
+      throw error;
+    }
   }
 
   unsubscribe(
@@ -108,5 +139,6 @@ export class RealtimeService implements OnModuleDestroy {
       [...this.listners.values()].map(({ client }) => client.end()),
     );
     this.listners.clear();
+    this.pendingListners.clear();
   }
 }

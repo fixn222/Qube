@@ -115,24 +115,33 @@ export class RealtimeGateway
       return;
     }
 
-    await client.join(room);
-
     const callback = (event: RealtimeEvent) => {
       client.emit(REALTME_EVENT.EVENT, event);
     };
-    await this.realtimeService.subscribe(
-      projectId,
-      normalizedTable,
-      callback as any,
-    );
-
     existing.push({
       projectId,
       tableName: normalizedTable,
       callback,
     });
-
     this.socketCallbacks.set(client.id, existing);
+
+    try {
+      await client.join(room);
+      await this.realtimeService.subscribe(
+        projectId,
+        normalizedTable,
+        callback as any,
+      );
+    } catch (error) {
+      this.socketCallbacks.set(
+        client.id,
+        existing.filter((entry) => entry.callback !== callback),
+      );
+      client.emit(
+        REALTME_EVENT.ERROR,
+        error instanceof Error ? error.message : 'Realtime subscription failed',
+      );
+    }
   }
 
   @SubscribeMessage(REALTME_EVENT.UNSUBSCRIBE)

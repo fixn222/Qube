@@ -59,35 +59,24 @@ Transform PostgreSQL into a reactive, event-driven backend without external mess
 - **Interactive Event Inspector**: Monitor live database activity in real time with operation badges (green for `INSERT`, yellow for `UPDATE`, red for `DELETE`), relative timestamps, and expandable JSON payload diffs.
 - **Secure Authentication**: WebSocket connections are authenticated using project JWT keys (`anonKey` or `serviceRoleKey`), isolating streams strictly by project scope.
 
-#### Client-Side Integration Example
-Frontend apps and microservices can subscribe to real-time table mutations using `socket.io-client`:
+#### Client-Side SDK
+Use the Qube JavaScript SDK for database queries, realtime subscriptions, and
+storage operations. See the [SDK guide](packages/qube-js/README.md) for setup,
+CRUD examples, realtime table configuration, and storage usage.
 
 ```typescript
-import { io } from "socket.io-client";
+import { createClient } from "qube-js";
 
-// Connect to Qube Realtime namespace with project anon key
-const socket = io("http://localhost:3000/realtime", {
-  auth: { token: "YOUR_PROJECT_ANON_KEY" },
-  transports: ["websocket", "polling"],
-});
+const qube = createClient(
+  "http://localhost:3000/api/projects/my-project",
+  "YOUR_PROJECT_ANON_KEY",
+);
 
-socket.on("connect", () => {
-  console.log("Connected to Qube Realtime stream");
-  // Subscribe to changes on the 'users' table
-  socket.emit("realtime:subscribe", "users");
-});
-
-// Handle real-time database events
-socket.on("realtime:event", (event) => {
+const unsubscribe = qube.realTime.subscribe("users", (event) => {
   console.log(`[${event.type}] on ${event.table}:`, event.record);
-  // event.type: 'INSERT' | 'UPDATE' | 'DELETE'
-  // event.record: current row data
-  // event.oldRecord: previous row data (on UPDATE / DELETE)
 });
 
-socket.on("realtime:error", (err) => {
-  console.error("Realtime subscription error:", err);
-});
+// Call unsubscribe() when the listener is no longer needed.
 ```
 
 ### Organizations and projects
@@ -127,6 +116,143 @@ DELETE  /api/projects/:projectSlug/rest/users/:id
 
 - `GET` accepts an anonymous project key and supports field selection, relational filtering (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `is`), sorting, limit, and offset pagination.
 - `POST`, `PATCH`, and `DELETE` endpoints are guarded by the project service-role key.
+
+## JavaScript SDK
+
+`qube-js` is the browser client for project database queries, realtime
+subscriptions, storage, and auth helpers. The full guide is also available in
+[`packages/qube-js/README.md`](packages/qube-js/README.md).
+
+### Install and initialize
+
+In this pnpm workspace, add the package to an app and build it before importing
+it (the package entry points resolve from `dist/`):
+
+```bash
+pnpm --filter web add qube-js@workspace:*
+pnpm --filter qube-js build
+```
+
+Create a client with the project API URL, ending at the project slug, and a
+project key:
+
+```ts
+import { createClient } from "qube-js";
+
+const qube = createClient(
+  "http://localhost:3000/api/projects/my-project",
+  process.env.NEXT_PUBLIC_QUBE_PROJECT_KEY!,
+);
+```
+
+The SDK appends REST and storage paths. The API must allow the web app's origin
+through CORS. Anonymous keys can read and subscribe to realtime; writes require
+a service-role key. A service-role key grants write access, so keep it on a
+trusted server and out of public browser apps.
+
+SDK calls return `{ data, error }`: successful calls have data and `error: null`;
+failed calls have `data: null` and an error message.
+
+### Database queries
+
+Queries support `.execute()` and can also be awaited directly:
+
+```ts
+type User = { id: string; email: string; name: string | null };
+
+const { data, error } = await qube
+  .from<User>("users")
+  .select("id,email,name")
+  .eq("email", "sam@example.com")
+  .order("name", "asc")
+  .limit(10)
+  .execute();
+
+if (error) console.error(error);
+else console.log(data); // User[]
+```
+
+Available read methods are `.select(columns)`, `.eq()`, `.noteq()`, `.gt()`,
+`.gte()`, `.lt()`, `.lte()`, `.like()`, `.ilike()`, `.is()`, `.order()`,
+`.limit()`, and `.offset()`. Reads return arrays. Inserts return the created
+row, while updates and deletes return the affected row:
+
+```ts
+const inserted = await qube
+  .from<User>("users")
+  .insert({ email: "sam@example.com", name: "Sam" })
+  .execute();
+
+const updated = await qube
+  .from<User>("users")
+  .update({ name: "Sam Q." })
+  .eq("id", "row-uuid")
+  .execute();
+
+const deleted = await qube
+  .from<User>("users")
+  .delete()
+  .eq("id", "row-uuid")
+  .execute();
+```
+
+Updates and deletes require `.eq("id", rowId)`. The API applies that ID to the
+table's primary key. The builder supports one filter per column; setting a
+second filter for the same column replaces the first.
+
+### Realtime
+
+Enable realtime for the table in the Qube project first. Subscribe to changes
+and optionally track connection status like this:
+
+```ts
+const unsubscribe = qube.realTime.subscribe(
+  "users",
+  (event) => console.log(event.type, event.record, event.oldRecord),
+  (status, message) => console.log(status, message),
+);
+
+// Call when the listener is no longer needed.
+unsubscribe();
+
+// Or close the socket and clear all subscriptions on this client.
+qube.realTime.disconnect();
+```
+
+Statuses are `connecting`, `connected`, `disconnected`, and `error`. Events
+have a `type` of `INSERT`, `UPDATE`, or `DELETE`, plus `table`, `record`,
+`projectId`, and `timestamp`. Updates and deletes also include `oldRecord`.
+Realtime uses Socket.IO at the API host's `/realtime` namespace. Browser pages
+must use HTTP(S), and the API must allow their origin.
+
+### Storage
+
+Create the bucket in Qube first. Listing and signed URL access use the project
+key; upload and delete require a service-role key. Upload accepts a browser
+`File` and requires UploadThing to be configured on the API:
+
+```ts
+const bucket = qube.storage.from("avatars");
+
+const listed = await bucket.list();
+const uploaded = await bucket.upload(fileInput.files![0]);
+const signed = uploaded.data
+  ? await bucket.getSignedUrl(uploaded.data.id)
+  : null;
+
+if (uploaded.error) console.error(uploaded.error);
+```
+
+The bucket methods also include `remove(objectId)` and
+`getSignedUrl(objectId)`. They return `{ data, error }`.
+
+### Authentication
+
+The client exposes `qube.auth.signIn`, `signUp`, `signOut`, `getUser`,
+`signInWithGoogle`, and `signInWithGithub`. Auth uses API cookies and browser
+credentials. Magic-link sign-in is not supported. The current `signUp` method
+sends email and password, while the API registration DTO also requires a name,
+so signup needs that contract aligned before it can succeed.
 
 ## Architecture
 
@@ -197,6 +323,7 @@ The backend stores application metadata—users, organizations, memberships, pro
 ├── docs/
 │   └── screenshots/                 # Application screenshots & UI previews
 ├── packages/
+│   ├── qube-js/                   # Browser JavaScript SDK and usage guide
 │   ├── constants/                   # Shared event names, roles, and tokens
 │   └── types/                       # Shared TypeScript interfaces & DTOs
 ├── package.json
