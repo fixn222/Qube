@@ -4,6 +4,7 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
+import { Boxes } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -23,30 +24,32 @@ import { Input } from "@/components/ui/input";
 import { authAction } from "@/features/auth/action";
 import { AUTH_INTENT } from "@/features/auth/constants";
 import { loginSchema } from "@/features/auth/client.schema";
-import { retriveTokenFromCookies } from "@/server-utils/utils";
-// import { proxy } from "@/poxy";
 
 type LoginFormValue = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const [state, formAction, isPending] = useActionState(authAction, {});
-  // const token = await retriveTokenFromCookies(); 
-  // console.log(token)
   const form = useForm<LoginFormValue>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4 py-32">
-      <Card className="w-full max-w-md shadow-sm">
-        <CardHeader>
-          <CardTitle>Wellcome Back!</CardTitle>
-          <CardDescription>Sign in to your account</CardDescription>
+    <main className="relative flex min-h-svh items-center justify-center overflow-hidden bg-background px-4 py-10">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_color-mix(in_oklch,var(--primary)_12%,transparent),transparent_55%)]" />
+      <div className="relative w-full max-w-md">
+        <Link href="/" className="mb-6 flex items-center justify-center gap-2 text-sm font-semibold tracking-tight">
+          <span className="flex size-8 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/20"><Boxes size={17} /></span>
+          Qube
+        </Link>
+      <Card className="w-full rounded-2xl border border-border/80 bg-card shadow-xl shadow-foreground/5 ring-1 ring-border/50">
+        <CardHeader className="px-6 pt-7 sm:px-8">
+          <CardTitle className="text-xl font-semibold tracking-tight">Welcome back</CardTitle>
+          <CardDescription>Sign in to continue to your workspace.</CardDescription>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="px-6 pb-7 sm:px-8">
           {state.error && (
-            <div className="bg-destructive/10 text-destructive text-sm rounded-lg px-4 mb-4">
+            <div role="alert" className="mb-4 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {state.error}
             </div>
           )}
@@ -85,7 +88,7 @@ export default function LoginPage() {
                 control={form.control}
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="login-password">password</FieldLabel>
+                    <FieldLabel htmlFor="login-password">Password</FieldLabel>
 
                     <Input
                       {...field}
@@ -177,6 +180,7 @@ export default function LoginPage() {
           </p>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </main>
   );
 }

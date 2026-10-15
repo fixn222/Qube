@@ -10,14 +10,17 @@ import {
   Query,
   Req,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { Request as ExpressRequest } from 'express';
 import { PROJECT_KEY_ROLE } from '@qube/constants';
 import { ProjectApiService } from './project-api.service';
 import { ProjectKeyGuard, ProjectKeyPayload } from './project-key.guard';
+import { ProjectTelemetryInterceptor } from '../analytics/project-telemetry.interceptor';
 
 @Controller('projects/:projectSlug/rest')
 @UseGuards(ProjectKeyGuard)
+@UseInterceptors(ProjectTelemetryInterceptor)
 export class ProjectApiController {
   constructor(private projectApiService: ProjectApiService) {}
 

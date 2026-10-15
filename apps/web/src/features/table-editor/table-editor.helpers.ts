@@ -3,6 +3,7 @@ import apiClient from '@/lib/axios';
 import { retriveTokenFromCookies } from '@/server-utils/utils';
 import { COOKIE_KEYS } from '@qube/constants';
 import type { Project } from '@qube/types';
+import axios from 'axios';
 
 export async function retrieveTablesFromApi(
   orgSlug: string,
@@ -19,9 +20,9 @@ export async function retrieveTablesFromApi(
     // console.log(data)
     return data;
 
-  } catch (error : any){
+  } catch (error: unknown){
 
-    console.log(error.message)   
+    if (axios.isAxiosError(error)) console.error(error.message);
     redirect(`/organizations/${orgSlug}/projects`);
   }
 }

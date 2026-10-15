@@ -18,6 +18,7 @@ import { RealtimeEvent } from '@qube/types';
 // import { table } from 'console';
 import { RealtimeService } from './realtime.service';
 import type { RealtimeSocket } from './realtime-socket.types';
+import { AnalyticsService } from '../analytics/analytics.service';
 
 type SocketCallbackEntry = {
   projectId: string;
@@ -44,6 +45,7 @@ export class RealtimeGateway
     private realtimeService: RealtimeService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private readonly analytics: AnalyticsService,
   ) {}
 
   async handleConnection(client: RealtimeSocket) {
@@ -71,6 +73,7 @@ export class RealtimeGateway
       client.data.role = payload.role;
 
       await client.join(`project:${payload.projectId}`);
+      void this.analytics.recordSafely({ projectId: payload.projectId, eventType: 'realtime.connection', source: 'realtime', operation: 'OPEN', success: true });
     } catch (e) {
       client.emit(REALTME_EVENT.ERROR, `Invalid API key`);
 
@@ -79,8 +82,11 @@ export class RealtimeGateway
   }
 
   handleDisconnect(client: Socket) {
+    const projectId = (client as RealtimeSocket).data.projectId;
+    if (projectId) void this.analytics.recordSafely({ projectId, eventType: 'realtime.connection', source: 'realtime', operation: 'CLOSE', success: true });
     const callbacks = this.socketCallbacks.get(client.id) ?? [];
     for (const { projectId, tableName, callback } of callbacks) {
+      void this.analytics.recordSafely({ projectId, eventType: 'realtime.subscription', source: 'realtime', operation: 'CLOSE', resource: tableName, success: true });
       this.realtimeService.unsubscribe(projectId, tableName, callback as any);
     }
     this.socketCallbacks.delete(client.id);
@@ -117,6 +123,7 @@ export class RealtimeGateway
 
     const callback = (event: RealtimeEvent) => {
       client.emit(REALTME_EVENT.EVENT, event);
+      void this.analytics.recordSafely({ projectId, eventType: 'realtime.delivery', source: 'realtime', operation: 'DELIVERY', resource: normalizedTable, success: true });
     };
     existing.push({
       projectId,
@@ -124,7 +131,6 @@ export class RealtimeGateway
       callback,
     });
     this.socketCallbacks.set(client.id, existing);
-
     try {
       await client.join(room);
       await this.realtimeService.subscribe(
@@ -132,6 +138,7 @@ export class RealtimeGateway
         normalizedTable,
         callback as any,
       );
+      void this.analytics.recordSafely({ projectId, eventType: 'realtime.subscription', source: 'realtime', operation: 'OPEN', resource: normalizedTable, success: true });
     } catch (error) {
       this.socketCallbacks.set(
         client.id,
@@ -171,6 +178,7 @@ export class RealtimeGateway
     );
 
     if (entry) {
+      void this.analytics.recordSafely({ projectId, eventType: 'realtime.subscription', source: 'realtime', operation: 'CLOSE', resource: normalizedTable, success: true });
       this.realtimeService.unsubscribe(
         projectId,
         normalizedTable,

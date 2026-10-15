@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Database } from 'lucide-react';
+import { ArrowUpRight, Database, FolderKanban } from 'lucide-react';
 import { retrieveOrgsBySlugFromApi } from '@/features/organization/organization-helpers';
 import { retrieveProjectsFromApi } from '@/features/projects/project-helpers.server';
 import { ORG_ROLES } from '@qube/constants';
@@ -20,42 +20,54 @@ export default async function ProjectsPage({
   const isAdmin = org.role === ORG_ROLES.ADMIN;
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-medium">Projects</h1>
-        {isAdmin && <CreateProjectModal slug={slug} />}
-      </div>
-
-      {/* Empty state */}
-      {projects.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center border border-dashed border-border rounded-xl">
-          <p className="text-muted-foreground text-sm">
-            No projects yet in {org.name}
-          </p>
-          <p className="text-muted-foreground text-xs mt-1">
-            Create your first project to get started
+    <div className="mx-auto w-full max-w-7xl space-y-8">
+      <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-primary">{org.name}</p>
+          <h1 className="text-3xl font-semibold tracking-tight">Projects</h1>
+          <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+            Each project has its own database, storage, and API configuration.
           </p>
         </div>
+        {isAdmin && projects.length > 0 && <CreateProjectModal slug={slug} />}
+      </header>
+
+      {projects.length === 0 ? (
+        <section className="flex min-h-72 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card px-6 py-14 text-center shadow-sm">
+          <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <FolderKanban size={22} />
+          </div>
+          <h2 className="text-lg font-semibold tracking-tight">No projects yet</h2>
+          <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
+            {isAdmin
+              ? `Create a project in ${org.name} to start building your backend.`
+              : 'Ask an organization admin to create the first project.'}
+          </p>
+          {isAdmin && (
+            <div className="mt-6"><CreateProjectModal slug={slug} /></div>
+          )}
+        </section>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <section aria-label="Projects" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (
             <Link
               key={project.id}
-              href={`/organizations/${slug}/${project.slug}/database`}
-              className="flex items-center gap-4 p-5 rounded-xl border border-border bg-background hover:bg-accent transition-colors"
+              href={`/organizations/${slug}/${project.slug}/overview`}
+              className="group rounded-2xl border border-border/80 bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                <Database size={18} className="text-muted-foreground" />
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                  <Database size={19} />
+                </div>
+                <ArrowUpRight size={16} className="text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
               </div>
-              <div className="min-w-0">
-                <p className="font-medium text-sm truncate">{project.name}</p>
-                <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                  {project.projectUrl}
-                </p>
-              </div>
+              <h2 className="mt-5 truncate text-base font-semibold tracking-tight">{project.name}</h2>
+              <p className="mt-1.5 truncate font-mono text-xs text-muted-foreground">
+                {project.projectUrl}
+              </p>
             </Link>
           ))}
-        </div>
+        </section>
       )}
     </div>
   );

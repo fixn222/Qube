@@ -120,6 +120,154 @@ export interface TableInfo {
   columns: TableCol[];
 }
 
+export type SchemaConstraintType = 'primary_key' | 'foreign_key' | 'unique' | 'check';
+export type SchemaCardinality = 'one_to_one' | 'many_to_one';
+
+export interface SchemaColumn {
+  name: string;
+  ordinal: number;
+  dataType: string;
+  nullable: boolean;
+  defaultValue: string | null;
+  primaryKey: boolean;
+  unique: boolean;
+}
+
+export interface SchemaConstraint {
+  name: string;
+  type: SchemaConstraintType;
+  columns: string[];
+  referencedSchema?: string;
+  referencedTable?: string;
+  referencedColumns?: string[];
+  onUpdate?: string;
+  onDelete?: string;
+  definition: string;
+}
+
+export interface SchemaIndex {
+  name: string;
+  columns: string[];
+  unique: boolean;
+  primary: boolean;
+  partial: boolean;
+  method: string;
+  definition: string;
+}
+
+export interface SchemaTable {
+  schema: string;
+  name: string;
+  columns: SchemaColumn[];
+  constraints: SchemaConstraint[];
+  indexes: SchemaIndex[];
+  estimatedRows: number | null;
+  sizeBytes: number | null;
+  isJunctionCandidate: boolean;
+}
+
+export interface SchemaRelationship {
+  id: string;
+  constraintName: string;
+  fromSchema: string;
+  fromTable: string;
+  fromColumns: string[];
+  toSchema: string;
+  toTable: string;
+  toColumns: string[];
+  cardinality: SchemaCardinality;
+  optional: boolean;
+  source: 'constraint';
+}
+
+export interface SchemaRelationshipSuggestion {
+  id: string;
+  fromTable: string;
+  toTable: string;
+  throughTable: string;
+  source: 'inferred';
+}
+
+export interface ProjectSchemaSnapshot {
+  schema: string;
+  capturedAt: string;
+  schemaHash: string;
+  tables: SchemaTable[];
+  relationships: SchemaRelationship[];
+  suggestions: SchemaRelationshipSuggestion[];
+}
+
+export type ObservatoryRange = '1h' | '24h' | '7d' | '30d';
+
+export interface ObservatorySeriesPoint {
+  at: string;
+  requests: number;
+  successes: number;
+  errors: number;
+  avgLatencyMs: number | null;
+  p50: number | null;
+  p95: number | null;
+  p99: number | null;
+}
+
+export interface ObservatorySnapshot {
+  generatedAt: string;
+  range: ObservatoryRange;
+  totalEvents: number;
+  totalErrors: number;
+  telemetryStatus: 'ready' | 'migration_required';
+  telemetryAvailableSince: string | null;
+  project: { id: string; name: string; slug: string; schema: string };
+  database: {
+    tableCount: number;
+    estimatedRows: number | null;
+    sizeBytes: number | null;
+  };
+  health: { status: 'operational' | 'degraded' | 'unknown'; detail: string };
+  api: {
+    requests: number;
+    successes: number;
+    errors: number;
+    successRate: number | null;
+    avgLatencyMs: number | null;
+    p50: number | null;
+    p95: number | null;
+    p99: number | null;
+    series: ObservatorySeriesPoint[];
+  };
+  sql: {
+    queries: number;
+    errors: number;
+    slowQueries: number;
+    avgLatencyMs: number | null;
+    p50: number | null;
+    p95: number | null;
+    p99: number | null;
+    series: ObservatorySeriesPoint[];
+    topFingerprints: Array<{ fingerprint: string; count: number; avgLatencyMs: number | null; maxLatencyMs: number | null }>;
+  };
+  realtime: {
+    connectionOpens: number;
+    connectionCloses: number;
+    subscriptionOpens: number;
+    subscriptionCloses: number;
+    deliveries: number;
+    series: ObservatorySeriesPoint[];
+  };
+  recentEvents: Array<{
+    id: string;
+    eventType: string;
+    source: string;
+    occurredAt: string;
+    operation: string | null;
+    resource: string | null;
+    durationMs: number | null;
+    statusCode: number | null;
+    success: boolean | null;
+    errorCode: string | null;
+  }>;
+}
+
 export interface CreateColInput {
   name: string;
   type: ColumnType;

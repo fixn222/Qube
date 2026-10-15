@@ -1,6 +1,5 @@
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { TopNav } from "@/components/top-nav";
 import { retriveTokenFromCookies } from "@/server-utils/utils";
 import { retriveMyOrgsFromApi } from "@/features/organization/organization-helpers";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -25,15 +24,11 @@ export default async function DashboardLayout({
     getCurrentUser(),
   ]);
   return (
-    <TooltipProvider >
-
-  <SidebarProvider>
-      <AppSidebar orgs={orgs} user={user} />
-      <SidebarInset>
-        {/* <TopNav/> */}
-       {children}
-      </SidebarInset>
-    </SidebarProvider>
+    <TooltipProvider>
+      <SidebarProvider>
+        <AppSidebar orgs={orgs} user={user} />
+        <SidebarInset className="min-h-svh bg-background">{children}</SidebarInset>
+      </SidebarProvider>
     </TooltipProvider>
   );
 }

@@ -13,10 +13,16 @@ async function refreshSession(
   const apiUrl = process.env.API_URL;
   if (!apiUrl) return false;
 
-  const refreshRes = await fetch(`${apiUrl}/auth/refresh`, {
-    method: "POST",
-    headers: { Cookie: `${COOKIE_KEYS.REFRESH_TOKEN}=${refreshToken}` },
-  });
+  let refreshRes: Response;
+  try {
+    refreshRes = await fetch(`${apiUrl}/auth/refresh`, {
+      method: "POST",
+      headers: { Cookie: `${COOKIE_KEYS.REFRESH_TOKEN}=${refreshToken}` },
+      signal: AbortSignal.timeout(5_000),
+    });
+  } catch {
+    return false;
+  }
 
   if (!refreshRes.ok) return false;
 

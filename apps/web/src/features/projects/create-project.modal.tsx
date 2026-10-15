@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,6 +33,7 @@ type CreateProjectValues = z.infer<typeof createProjectScema>;
 
 export function CreateProjectModal({ slug }: CreateProjectModalProps) {
   const [open, setOpen] = useState(false);
+  const [hidePreviousError, setHidePreviousError] = useState(true);
   const boundAction = projectAction.bind(null, { slug });
   const [state, formAction, isPending] = useActionState(boundAction, {});
 
@@ -41,15 +42,26 @@ export function CreateProjectModal({ slug }: CreateProjectModalProps) {
     defaultValues: { name: '' },
   });
 
-  // close modal on success
-  if (state.success && open) {
-    setOpen(false);
-    form.reset();
-  }
+  useEffect(() => {
+    if (state.success && open) {
+      const closeDialog = window.setTimeout(() => {
+        setOpen(false);
+        form.reset();
+      }, 0);
+      return () => window.clearTimeout(closeDialog);
+    }
+  }, [form, open, state]);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger >
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (nextOpen) setHidePreviousError(true);
+        if (!nextOpen) form.reset();
+      }}
+    >
+      <DialogTrigger asChild>
         <Button size="sm">
           <Plus size={14} className="mr-1.5" />
           New project
@@ -65,13 +77,30 @@ export function CreateProjectModal({ slug }: CreateProjectModalProps) {
 
         <form
           action={formAction}
+          aria-describedby={
+            state.error && !hidePreviousError ? 'project-create-error' : undefined
+          }
           noValidate
           onSubmitCapture={async (e) => {
             const ok = await form.trigger(undefined, { shouldFocus: true });
-            if (!ok) e.preventDefault();
+            if (!ok) {
+              e.preventDefault();
+              return;
+            }
+            setHidePreviousError(false);
           }}
           className="space-y-4"
         >
+          {state.error && !hidePreviousError && (
+            <p
+              id="project-create-error"
+              role="alert"
+              aria-live="polite"
+              className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              {state.error}
+            </p>
+          )}
           <FieldGroup>
             <Controller
               name="name"

@@ -6,7 +6,7 @@ import { memberServerSchema } from "./server.schema";
 import { MEMBERS_INTENT } from "./constants";
 import { retriveTokenFromCookies } from "@/server-utils/utils";
 import apiClient from "@/lib/axios";
-import { email, success } from "zod";
+import axios from "axios";
 import { COOKIE_KEYS } from "@qube/constants";
 // import { error } from "console";
 // import { error } from "console";
@@ -76,8 +76,9 @@ export async function membersAction(
             }
 
         }
-    } catch (err: any) {
-        return {error : err.response?.data?.message ?? 'Something went wrong'}
+    } catch (err: unknown) {
+        const message = axios.isAxiosError<{ message?: string }>(err) ? err.response?.data?.message : undefined;
+        return {error : message ?? 'Something went wrong'}
 
     }
 }

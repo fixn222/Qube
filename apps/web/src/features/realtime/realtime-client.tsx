@@ -271,9 +271,9 @@ export function RealtimeClient({
                         {event.table}
                       </span>
                       <span className="ml-auto text-xs text-muted-foreground">
-                        {new Date(
-                          event.timestamp ?? event.timeStamp ?? Date.now(),
-                        ).toLocaleTimeString()}
+                        {(event.timestamp ?? event.timeStamp)
+                          ? new Date(event.timestamp ?? event.timeStamp!).toLocaleTimeString()
+                          : 'just now'}
                       </span>
                     </div>
                     <pre className="overflow-x-auto rounded-lg bg-muted p-2 font-mono text-xs">
