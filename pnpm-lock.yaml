@@ -273,9 +273,6 @@ importers:
 
   packages/qube-js:
     dependencies:
-      '@qube/constants':
-        specifier: workspace:*
-        version: link:../constants
       socket.io-client:
         specifier: ^4.8.3
         version: 4.8.3(supports-color@10.2.2)
@@ -283,9 +280,6 @@ importers:
         specifier: ^7.7.4
         version: 7.7.4(express@5.2.1(supports-color@10.2.2))(next@16.3.0(@babel/core@7.29.7(supports-color@10.2.2))(@types/node@24.13.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(tailwindcss@4.3.3)
     devDependencies:
-      '@qube/types':
-        specifier: workspace:*
-        version: link:../types
       tsdown:
         specifier: ^0.23.0
         version: 0.23.1(tsx@4.23.1)(typescript@7.0.2)

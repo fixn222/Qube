@@ -1,6 +1,12 @@
 import { io, type Socket } from "socket.io-client";
-import { REALTME_EVENT } from "@qube/constants";
-import type { RealtimeEvent } from "@qube/types";
+import type { RealtimeEvent } from "../types";
+
+const REALTME_EVENT = {
+  SUBSCRIBE: "subscribe",
+  UNSUBSCRIBE: "unsubscribe",
+  EVENT: "event",
+  ERROR: "error",
+} as const;
 
 export type RealtimeCallback = (event: RealtimeEvent) => void;
 export type RealtimeConnectionStatus =

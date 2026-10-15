@@ -8,13 +8,8 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   minify: false,
-  deps : {
-    neverBundle : ['@qube/types'] ,
-    alwaysBundle : [
-      'socket-io-client' ,
-      'uploadthing' ,
-      '@qube/constants' ,
-      'uploadthing/client'
-    ]
+  deps: {
+    neverBundle: ["socket.io-client"],
+    alwaysBundle: ["uploadthing", "uploadthing/client"],
   }
 });

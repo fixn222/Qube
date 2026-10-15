@@ -11,7 +11,7 @@ export default async function OrgLayout({
   const { slug } = await params;
   const projects = await retrieveProjectsFromApi(slug);
 
-  console.log(projects)
+  // console.log(projects)
 
   return (
     <>

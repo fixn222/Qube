@@ -16,5 +16,6 @@ export type {
   RealtimeConnectionStatus,
   RealtimeStatusCallback,
 } from './realtime';
+export type { RealtimeEvent, StorageObject } from './types';
 export { QubeStorage } from './storage';
 export { QubeAuth } from './auth';

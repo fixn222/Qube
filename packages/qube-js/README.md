@@ -15,6 +15,17 @@ pnpm --filter qube-js build
 The package exports ESM, CommonJS, and TypeScript declarations from `dist/`.
 Build it before using it from an app that resolves the workspace package exports.
 
+To make and test a standalone package archive from this directory:
+
+```bash
+pnpm --filter qube-js build
+npm pack --pack-destination /tmp
+```
+
+Install the generated archive in an independent app with
+`npm install /absolute/path/to/qube-js-1.0.0.tgz`. The archive includes the
+compiled SDK and declarations; it does not require the Qube monorepo.
+
 ## Create a client
 
 Pass the project API URL and a project key to `createClient`:

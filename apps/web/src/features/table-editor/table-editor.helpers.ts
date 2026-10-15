@@ -16,7 +16,7 @@ export async function retrieveTablesFromApi(
       { headers: { Cookie: `${COOKIE_KEYS.ACCESS_TOKEN}=${token}` } },
     );
 
-    console.log(data)
+    // console.log(data)
     return data;
 
   } catch (error : any){

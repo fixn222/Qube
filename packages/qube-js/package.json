@@ -7,11 +7,21 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
@@ -22,12 +32,10 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "@qube/constants": "workspace:*",
     "socket.io-client": "^4.8.3",
     "uploadthing": "^7.7.4"
   },
   "devDependencies": {
-    "@qube/types": "workspace:*",
     "tsdown": "^0.23.0",
     "typescript": "^7.0.2"
   }
