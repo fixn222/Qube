@@ -5,6 +5,7 @@ import { ProjectServerSchema } from "./server.schema"
 import { COOKIE_KEYS } from "@qube/constants"
 import { retriveTokenFromCookies } from "@/server-utils/utils"
 import apiClient from "@/lib/axios"
+import axios from "axios"
 
 import { PROJECT_INTENT } from "./constants"
 
@@ -42,9 +43,9 @@ export async function projectAction(
         return { success: 'Project created!' };
       }
     }
-}catch (e : any){
-        
-  return { error: e.response?.data?.message ?? 'Something went wrong' };
+}catch (e : unknown){
+  const message = axios.isAxiosError<{ message?: string }>(e) ? e.response?.data?.message : undefined;
+  return { error: message ?? 'Something went wrong' };
 
 }
 }

@@ -12,6 +12,8 @@ import { ProjectApiModule } from './project-api/project-api.module';
 import { SqlEditorModule } from './sql-editor/sql-editor.module';
 import { RealtimeModule } from './real-time/realtime.module';
 import { StorageModule } from './storage/storage.module';
+import { SchemaIntrospectionModule } from './schema-introspection/schema-introspection.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -25,6 +27,8 @@ import { StorageModule } from './storage/storage.module';
     SqlEditorModule,
     RealtimeModule,
     StorageModule,
+    SchemaIntrospectionModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

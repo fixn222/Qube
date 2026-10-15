@@ -11,12 +11,13 @@ import type {
 
 import { and, desc, eq } from 'drizzle-orm';
 import { DrizzleService } from '../db/drizzle.service';
+import { AnalyticsService, createQueryFingerprint } from '../analytics/analytics.service';
 import { projects, organizations, queryHistory } from '../db/schema';
 import type { QueryResult } from '@qube/types';
 
 @Injectable()
 export class SqlEditorService {
-  constructor(private drizzle: DrizzleService) { }
+  constructor(private drizzle: DrizzleService, private readonly analytics: AnalyticsService) { }
 
   private assertSafeIdentifier(name: string, label: string): void {
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
@@ -134,6 +135,16 @@ export class SqlEditorService {
         rowCount,
       });
 
+      await this.analytics.recordSafely({
+        projectId: project.id,
+        eventType: 'sql.query',
+        source: 'sql_editor',
+        durationMs: executionTimeMs,
+        success: true,
+        operation: command,
+        queryFingerprint: createQueryFingerprint(statement),
+      });
+
       return {
         rows,
         columns,
@@ -142,6 +153,16 @@ export class SqlEditorService {
         command,
       };
     } catch (err: unknown) {
+      await this.analytics.recordSafely({
+        projectId: project.id,
+        eventType: 'sql.query',
+        source: 'sql_editor',
+        durationMs: Date.now() - start,
+        success: false,
+        operation: statement.trim().split(/\s+/, 1)[0]?.toUpperCase(),
+        queryFingerprint: createQueryFingerprint(statement),
+        errorCode: 'QUERY_FAILED',
+      });
       const message = err instanceof Error ? err.message : 'Query failed';
       throw new BadRequestException(message);
     }

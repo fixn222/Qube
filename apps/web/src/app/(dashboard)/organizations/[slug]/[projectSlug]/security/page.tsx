@@ -1,0 +1,3 @@
+export default function ProjectSecurityPage() {
+  return <main className="mx-auto w-full max-w-5xl space-y-5 p-5 sm:p-8"><header><p className="text-sm text-muted-foreground">Project observability</p><h1 className="mt-2 text-2xl font-semibold">Security & Audit</h1><p className="mt-2 text-sm text-muted-foreground">Security audit events are not instrumented yet.</p></header><section className="rounded-xl border border-dashed p-6"><h2 className="font-medium">No audit events available</h2><p className="mt-2 text-sm text-muted-foreground">Qube does not currently collect login, permission-change, or policy audit events for this project. This page will not display estimated or sample data.</p></section></main>;
+}

@@ -387,6 +387,8 @@ Apply database migrations:
 pnpm --filter api db:migrate
 ```
 
+For local Docker installation and lifecycle commands, see [SELF_HOSTING.md](./SELF_HOSTING.md). Observatory schema discovery and telemetry are available in project navigation after migrations are applied.
+
 Start the development servers:
 
 ```bash

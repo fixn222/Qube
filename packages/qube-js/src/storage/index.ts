@@ -1,6 +1,6 @@
 
 import { genUploader } from 'uploadthing/client'
-import type { StorageObject } from '@qube/types'
+import type { StorageObject } from '../types'
 
 
 type StorageUploadRouter = {

@@ -5,6 +5,7 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
+import { Boxes } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -35,15 +36,21 @@ export default function RegisterPage() {
   });
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4 py-12">
-      <Card className="w-full max-w-md shadow-sm">
-        <CardHeader>
-          <CardTitle>Create an account</CardTitle>
-          <CardDescription>Start building with Supavolt</CardDescription>
+    <main className="relative flex min-h-svh items-center justify-center overflow-hidden bg-background px-4 py-10">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_color-mix(in_oklch,var(--primary)_12%,transparent),transparent_55%)]" />
+      <div className="relative w-full max-w-md">
+        <Link href="/" className="mb-6 flex items-center justify-center gap-2 text-sm font-semibold tracking-tight">
+          <span className="flex size-8 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/20"><Boxes size={17} /></span>
+          Qube
+        </Link>
+      <Card className="w-full rounded-2xl border border-border/80 bg-card shadow-xl shadow-foreground/5 ring-1 ring-border/50">
+        <CardHeader className="px-6 pt-7 sm:px-8">
+          <CardTitle className="text-xl font-semibold tracking-tight">Create your account</CardTitle>
+          <CardDescription>Start building in your Qube workspace.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-6 pb-7 sm:px-8">
           {state.error && (
-            <div className="bg-destructive/10 text-destructive text-sm rounded-lg px-4 py-3 mb-4">
+            <div role="alert" className="mb-4 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {state.error}
             </div>
           )}
@@ -83,10 +90,10 @@ export default function RegisterPage() {
                 control={form.control}
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="login-email">Email</FieldLabel>
+                    <FieldLabel htmlFor="register-email">Email</FieldLabel>
                     <Input
                       {...field}
-                      id="login-email"
+                      id="register-email"
                       type="email"
                       autoComplete="email"
                       aria-invalid={fieldState.invalid}
@@ -103,12 +110,12 @@ export default function RegisterPage() {
                 control={form.control}
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="login-password">Password</FieldLabel>
+                    <FieldLabel htmlFor="register-password">Password</FieldLabel>
                     <Input
                       {...field}
-                      id="login-password"
+                      id="register-password"
                       type="password"
-                      autoComplete="current-password"
+                      autoComplete="new-password"
                       aria-invalid={fieldState.invalid}
                     />
                     {fieldState.invalid && (
@@ -186,7 +193,7 @@ export default function RegisterPage() {
           </div>
 
           <p className="text-center text-sm text-muted-foreground mt-6">
-            Don&apos;t have an account?{" "}
+            Already have an account?{" "}
             <Link
               href="/login"
               className="font-medium text-foreground hover:underline"
@@ -196,6 +203,7 @@ export default function RegisterPage() {
           </p>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </main>
   );
 }

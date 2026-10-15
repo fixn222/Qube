@@ -23,6 +23,9 @@ RUN pnpm install --frozen-lockfile
 
 FROM base AS builder
 
+ARG NEXT_PUBLIC_API_URL=http://localhost:3000/api
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=dependencies /app/apps/web/node_modules ./apps/web/node_modules
 
@@ -44,4 +47,6 @@ COPY --from=builder /app/apps/web/public ./apps/web/public
 
 
 EXPOSE 3000
+RUN chown -R node:node /app
+USER node
 CMD ["node", "apps/web/server.js"]

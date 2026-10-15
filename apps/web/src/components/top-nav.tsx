@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, usePathname, useSearchParams } from 'next/navigation';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
@@ -21,12 +21,17 @@ interface TopNavProps {
 
 export function TopNav({ projects }: TopNavProps) {
   const params = useParams<{ slug: string; projectSlug: string }>();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const currentProject = projects.find((p) => p.slug === params?.projectSlug);
-
-  console.log('projects', projects);
+  const projectPath = pathname.replace(
+    `/organizations/${params?.slug}/${params?.projectSlug}`,
+    '',
+  );
+  const query = searchParams.toString();
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+    <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border/80 bg-background/90 px-4 backdrop-blur-xl md:px-6">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mr-2 h-4" />
 
@@ -34,17 +39,17 @@ export function TopNav({ projects }: TopNavProps) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="gap-1.5 font-normal">
-              <span className="text-sm">
+              <span className="max-w-48 truncate text-sm font-medium">
                 {currentProject?.name ?? 'Select project'}
               </span>
               <ChevronsUpDown size={12} className="text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
+          <DropdownMenuContent align="start" className="w-60 rounded-xl p-1.5 shadow-xl">
             {projects.map((project) => (
               <DropdownMenuItem key={project.id} asChild>
                 <Link
-                  href={`/organizations/${params.slug}/${project.slug}/database`}
+                  href={`/organizations/${params.slug}/${project.slug}${projectPath || '/overview'}${query ? `?${query}` : ''}`}
                   className="flex items-center justify-between"
                 >
                   <span>{project.name}</span>

@@ -3,30 +3,31 @@
 import { useEffect, useState } from "react";
 import { createClient } from "qube-js";
 
-const client = createClient(
-    "http://localhost:3000/api/projects/test-7832b8",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwcm9qZWN0SWQiOiJmZDUzNzVmMi0xMzdiLTRkMjItYjQwZC1lZWZlZmNhODJjMTUiLCJyb2xlIjoic2VydmljZV9yb2xlIiwiaWF0IjoxNzg3NjAwNDE0LCJleHAiOjQ5NDMzNjA0MTR9.GTg4luKeUZIxRZAiuAaoNuoJOW1pDsRgJSuwnJ39mOc",
-);
-
 const table = "users";
+type QubeClient = ReturnType<typeof createClient>;
 
 export default function SdkTestPage() {
     const [rowId, setRowId] = useState("");
+    const [apiUrl, setApiUrl] = useState("http://localhost:3000/api/projects/your-project-slug");
+    const [apiKey, setApiKey] = useState("");
+    const [client, setClient] = useState<QubeClient | null>(null);
     const [name, setName] = useState("SDK test row");
-    const [email, setEmail] = useState(
-        `sdk-test-${Date.now()}@example.com`,
-    );
+    const [email, setEmail] = useState("sdk-test@example.com");
     const [result, setResult] = useState("Ready");
     const [events, setEvents] = useState<string[]>([]);
     const [listening, setListening] = useState(false);
     const [realtimeStatus, setRealtimeStatus] = useState("Disconnected");
 
-    useEffect(() => () => client.realTime.disconnect(), []);
+    useEffect(() => () => client?.realTime.disconnect(), [client]);
 
     async function runAction(action: string, request: () => Promise<{
         data: unknown;
         error: string | null;
     }>) {
+        if (!client) {
+            setResult("Connect an API URL and key before running SDK operations.");
+            return;
+        }
         setResult(`${action}…`);
         try {
             const response = await request();
@@ -39,39 +40,47 @@ export default function SdkTestPage() {
     }
 
     function readRows() {
+        const activeClient = client;
+        if (!activeClient) return setResult("Connect an API URL and key first.");
         return runAction("Reading rows", () =>
-            client.from(table).select("*").limit(10).execute(),
+            activeClient.from(table).select("*").limit(10).execute(),
         );
     }
 
     function insertRow() {
+        const activeClient = client;
+        if (!activeClient) return setResult("Connect an API URL and key first.");
         return runAction("Inserting row", () =>
-            client.from(table).insert({ name, email }).execute(),
+            activeClient.from(table).insert({ name, email }).execute(),
         );
     }
 
     function updateRow() {
+        const activeClient = client;
+        if (!activeClient) return setResult("Connect an API URL and key first.");
         if (!rowId.trim()) {
             setResult("Enter a row ID before updating.");
             return;
         }
         return runAction("Updating row", () =>
-            client.from(table).update({ name }).eq("id", rowId.trim()).execute(),
+            activeClient.from(table).update({ name }).eq("id", rowId.trim()).execute(),
         );
     }
 
     function deleteRow() {
+        const activeClient = client;
+        if (!activeClient) return setResult("Connect an API URL and key first.");
         if (!rowId.trim()) {
             setResult("Enter a row ID before deleting.");
             return;
         }
         return runAction("Deleting row", () =>
-            client.from(table).delete().eq("id", rowId.trim()).execute(),
+            activeClient.from(table).delete().eq("id", rowId.trim()).execute(),
         );
     }
 
     function startRealtime() {
-        if (listening) return;
+        if (listening || !client) return;
         setEvents([]);
         client.realTime.subscribe(table, (event) => {
             setEvents((current) => [
@@ -86,7 +95,7 @@ export default function SdkTestPage() {
     }
 
     function stopRealtime() {
-        client.realTime.disconnect();
+        client?.realTime.disconnect();
         setListening(false);
         setRealtimeStatus("Disconnected");
     }
@@ -117,6 +126,14 @@ export default function SdkTestPage() {
                 <h1>Qube SDK test</h1>
                 <p>Database and realtime operations for the <code>{table}</code> table.</p>
             </header>
+
+            <section style={sectionStyle} aria-labelledby="connect-heading">
+                <h2 id="connect-heading">Connect a project</h2>
+                <label style={{ display: "grid", gap: 6 }}>Project API URL<input style={inputStyle} value={apiUrl} onChange={(event) => setApiUrl(event.target.value)} /></label>
+                <label style={{ display: "grid", gap: 6 }}>Project API key<input style={inputStyle} type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} /></label>
+                <p style={{ margin: 0, fontSize: 13 }}>Use a development project key. Keys entered here stay in this browser session and are not saved by Qube.</p>
+                <button style={buttonStyle} onClick={() => { if (!apiUrl.trim() || !apiKey.trim()) { setResult("Enter both the project URL and key."); return; } setClient(createClient(apiUrl.trim(), apiKey.trim())); setResult("SDK client connected."); }}>Connect SDK</button>
+            </section>
 
             <section style={sectionStyle} aria-labelledby="read-heading">
                 <h2 id="read-heading">Read</h2>

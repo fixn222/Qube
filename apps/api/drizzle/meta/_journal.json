@@ -50,6 +50,13 @@
       "when": 1789511549254,
       "tag": "0006_green_the_phantom",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792100576745,
+      "tag": "0007_analytics_events",
+      "breakpoints": true
     }
   ]
 }

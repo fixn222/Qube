@@ -31,6 +31,7 @@ RUN pnpm --filter api build
 FROM base AS runner
 
 ENV NODE_ENV=production
+ENV PORT=3000
 
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/pnpm-workspace.yaml ./
@@ -41,6 +42,7 @@ COPY --from=builder /app/packages ./packages
 
 WORKDIR /app/apps/api
 
-EXPOSE 4000
+USER node
+EXPOSE 3000
 
-CMD ["pnpm", "start"]
+CMD ["sh", "-c", "pnpm db:migrate && pnpm start:prod"]
