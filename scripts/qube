@@ -32,12 +32,27 @@ check_prerequisites() {
   case "$arch" in x86_64|aarch64|arm64) ;; *) fail "Unsupported architecture: $arch" ;; esac
 }
 
-prompt_database_uri() {
-  local uri
-  printf 'Paste the PostgreSQL connection URI below. Terminal input will remain visible as requested.\n' >&2
-  read -r -p 'DATABASE_URL: ' uri
-  [[ "$uri" == postgres://* || "$uri" == postgresql://* ]] || fail "DATABASE_URL must begin with postgres:// or postgresql://."
+validate_neon_uri() {
+  local uri="$1" authority host query
+  [[ "$uri" == postgres://* || "$uri" == postgresql://* ]] || fail "Database URI must begin with postgres:// or postgresql://."
   [[ "$uri" != *$'\n'* && "$uri" != *$'\r'* && "$uri" != *"'"* ]] || fail "Use a single-line URI and percent-encode special characters in the credentials."
+  authority="${uri#*://}"
+  authority="${authority%%/*}"
+  [[ "$authority" == *@* ]] || fail "Neon URI must include a username and database host."
+  host="${authority##*@}"
+  host="${host%%:*}"
+  [[ "$host" == *.neon.tech ]] || fail "Only Neon database URIs with a .neon.tech hostname are supported."
+  query="${uri#*\?}"
+  [[ "$query" != "$uri" ]] || fail "Neon URI must include sslmode=require (or sslmode=verify-full)."
+  query="&${query%%#*}&"
+  [[ "$query" == *'&sslmode=require&'* || "$query" == *'&sslmode=verify-full&'* ]] || fail "Neon URI must include sslmode=require or sslmode=verify-full."
+}
+
+prompt_database_uri() {
+  local label="${1:-DATABASE_URL}" uri
+  printf 'Paste the Neon PostgreSQL connection URI below. The URI remains visible as you type.\n' >&2
+  read -r -p "$label: " uri
+  validate_neon_uri "$uri"
   printf '%s' "$uri"
 }
 
@@ -82,8 +97,7 @@ discover_neon_uri() {
     --data-urlencode "branch_id=$branch_id" \
     "https://console.neon.tech/api/v2/projects/$project_id/connection_uri")" || fail "Neon could not return a URI for the selected database role."
   uri="$(jq -r '.uri // .connection_uri // empty' <<< "$uri_response")"
-  [[ "$uri" == postgres://* || "$uri" == postgresql://* ]] || fail "Neon returned an invalid PostgreSQL URI."
-  [[ "$uri" != *$'\n'* && "$uri" != *$'\r'* && "$uri" != *"'"* ]] || fail "Neon returned a URI with unsupported characters."
+  validate_neon_uri "$uri"
   rm -f "$TEMP_FILE"
   TEMP_FILE=""
   printf '%s' "$uri"
@@ -143,8 +157,8 @@ install_qube() {
   if [[ -t 0 ]]; then read -r -p 'Discover an existing Neon project? [y/N] ' use_neon; else use_neon=n; fi
   if yes_no "$use_neon"; then database_uri="$(discover_neon_uri)"; else database_uri="$(prompt_database_uri)"; fi
   if [[ -t 0 ]]; then
-    read -r -p 'Add a separate direct PostgreSQL URI for Realtime LISTEN/NOTIFY? [y/N] ' use_realtime
-    if yes_no "$use_realtime"; then realtime_uri="$(prompt_database_uri)"; fi
+    read -r -p 'Add a separate direct Neon URI for Realtime LISTEN/NOTIFY? [y/N] ' use_realtime
+    if yes_no "$use_realtime"; then realtime_uri="$(prompt_database_uri REALTIME_DATABASE_URL)"; fi
   fi
   read -r -p 'Dashboard host port [3001]: ' web_port; web_port="${web_port:-3001}"
   read -r -p 'API host port [3000]: ' api_port; api_port="${api_port:-3000}"

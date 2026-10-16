@@ -1,6 +1,6 @@
 # Run Qube in one Docker container
 
-Qube runs its web app and API in **one container**. PostgreSQL remains an external service such as Neon; Qube does not launch a separate database container. Its user, organization, project, telemetry, and query-history metadata use the PostgreSQL database configured by `DATABASE_URL`.
+Qube runs its web app and API in **one container**. PostgreSQL remains an external service; the self-host installer requires a Neon database URI. Qube does not launch a separate database container. Its user, organization, project, telemetry, and query-history metadata use the Neon database configured by `DATABASE_URL`.
 
 ## Install from a source checkout
 
@@ -10,7 +10,7 @@ Requirements on the host: Docker Engine, Docker Compose v2, `curl`, `jq`, and Op
 ./scripts/qube install
 ```
 
-The installer checks Docker and architecture, then asks for a database URI. For the manual URI prompt, terminal input is visible while typing/pasting, as requested. Paste a URI with percent-encoded special characters. Do not share terminal recordings or transcripts that contain it. The URI is stored in `.qube/.env`, mode `0600`, under a mode `0700` directory.
+The installer checks Docker and architecture, then asks for a Neon connection URI. For the manual URI prompt, terminal input is visible while typing or pasting. The hostname must end in `.neon.tech` and the query must include `sslmode=require` or `sslmode=verify-full`; percent-encode special characters in credentials. Do not share terminal recordings or transcripts that contain the URI. It is stored in `.qube/.env`, mode `0600`, under a mode `0700` directory.
 
 You can instead choose Neon discovery. The installer hides the Neon management API key, validates it with Neon, lists projects, and requests a connection URI for the selected project, database, role, and branch. It does not create Neon resources. Neon management credentials and SQL credentials are separate permissions.
 
@@ -31,7 +31,7 @@ The browser uses `PUBLIC_API_URL`, compiled into the web bundle. `API_URL` is se
 
 | Variable or credential | Required | Used by |
 | --- | --- | --- |
-| `DATABASE_URL` | Yes | Qube API and migrations; PostgreSQL connection URL. |
+| `DATABASE_URL` | Yes | Qube API and migrations; Neon PostgreSQL connection URI with TLS enabled. |
 | `JWT_ACCESS_SECRET` | Yes | API JWT signing and web session verification. |
 | `JWT_REFRESH_SECRET` | Yes | Refresh-token signing. |
 | `PROJECT_JWT_SECRET` | Yes | Project API token signing. |
@@ -39,7 +39,7 @@ The browser uses `PUBLIC_API_URL`, compiled into the web bundle. `API_URL` is se
 | `WEB_URL` | Yes | Dashboard origin for CORS and auth redirects. |
 | `PUBLIC_API_URL` | Yes | Browser API endpoint and public links. Set it to the API’s externally reachable URL. |
 | `API_URL` | Internal | Server-side web-to-API requests; set by Compose to the API in the same container. |
-| `REALTIME_DATABASE_URL` | Optional | Direct/unpooled PostgreSQL URL for LISTEN/NOTIFY when `DATABASE_URL` is pooled. |
+| `REALTIME_DATABASE_URL` | Optional | Direct/unpooled Neon URI for LISTEN/NOTIFY when `DATABASE_URL` is pooled; same hostname and TLS validation applies. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL` | Optional | Google OAuth. Register the callback URL with Google. |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_CALLBACK_URL` | Optional | GitHub OAuth. Register the callback URL with GitHub. |
 | `RESEND_API_KEY` | Optional | Email delivery for organization invitations. Without it, email invitations are unavailable. |
@@ -71,6 +71,7 @@ Backups and restores run `pg_dump`/`pg_restore` inside the Qube container so the
 
 - **Docker unavailable:** start the daemon and verify `docker info`; install Compose v2 if `docker compose version` fails.
 - **Migration or health check failure:** run `./scripts/qube logs`; check URI encoding, database DNS/TLS, and the role’s migration permissions.
+- **URI rejected by installer:** use a Neon connection URI whose host ends in `.neon.tech` and include `sslmode=require` (or `sslmode=verify-full`).
 - **Realtime listener cannot connect:** use a direct, unpooled `REALTIME_DATABASE_URL` and ensure the database permits connections from this host.
 - **Browser cannot reach the API:** check `PUBLIC_API_URL`, its host port, and proxy/firewall rules; rebuild using `./scripts/qube update` after changing the public URL.
 - **OAuth redirect mismatch:** the callback URL must exactly match the provider console and use the public API origin.
