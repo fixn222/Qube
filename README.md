@@ -1,476 +1,453 @@
 # Qube
 
-Qube is a modern, unified PostgreSQL developer platform and workspace. It brings together isolated per-project schemas, visual data management, an interactive SQL editor, auto-generated REST APIs, and **live real-time database change streams via WebSockets**.
+Qube is a PostgreSQL developer workspace for managing organizations and projects, designing schemas, working with data, running SQL, exposing table REST endpoints, and streaming database changes in real time.
 
-## Overview
+The repository is a pnpm monorepo. It contains a Next.js dashboard, a NestJS API, shared TypeScript packages, and the `qube-js` client SDK. Qube stores application metadata and project data in PostgreSQL. Each Qube project receives an isolated PostgreSQL schema.
 
-Qube bridges the gap between database administration, API generation, and real-time event distribution. Teams can organize work into organizations and projects, provision dedicated PostgreSQL schemas, shape tables visually, inspect and mutate data, execute SQL queries, consume instant REST endpoints, and stream `INSERT`, `UPDATE`, and `DELETE` events directly to client applications in real time.
+## Contents
 
-```text
-Organization
-      ↓
-Project (dedicated PostgreSQL schema & API keys)
-      ↓
-Tables and Schema Definitions
-      ├── Visual Table Editor & Row Inspector
-      ├── Monaco SQL Editor with Execution History
-      ├── Auto-Generated REST Endpoints
-      └── ⚡ Real-Time WebSocket Event Streaming (pg_notify)
-```
+- [Product screenshots](#product-screenshots)
+- [Capabilities](#capabilities)
+- [Architecture](#architecture)
+- [Repository layout](#repository-layout)
+- [Developer setup](#developer-setup)
+- [Environment variables](#environment-variables)
+- [Run Qube with Docker](#run-qube-with-docker)
+- [Database development and migrations](#database-development-and-migrations)
+- [Application and SDK development](#application-and-sdk-development)
+- [SDK guide](SDK.md)
+- [Commands](#commands)
+- [Testing and verification](#testing-and-verification)
+- [Security notes](#security-notes)
+- [Contributing](#contributing)
 
-## 📸 Screenshots
+## Product screenshots
 
-### ⚡ Real-Time Live Event Inspector
-Stream database mutations in real time. Toggle triggers on any table and inspect live `INSERT`, `UPDATE`, and `DELETE` event feeds with full JSON payloads and change diffs.
+The images below are stored in [`docs/screenshots/`](docs/screenshots/) and cover the available project workflows.
 
-![Qube Real-Time Event Inspector](./docs/screenshots/real-time.png)
+### Project overview
 
-### Dashboard
-Manage organizations, projects, API keys, and workspace settings from a single view.
+See project health, database table count, recent activity, and shortcuts to common tools.
 
-![Qube Dashboard](./docs/screenshots/bashboard.png)
+![Qube project overview](docs/screenshots/project-overview.png)
 
-### Table Editor
-Visually inspect schema definitions, configure column types, defaults, and foreign keys, and manage table rows with inline editing.
+### Database Explorer
 
-![Qube Table Editor](./docs/screenshots/table-editor.png)
+Explore tables and their columns in a visual schema view.
 
-### SQL Editor
-Execute raw queries against your project's isolated schema with syntax highlighting, performance metrics, and saved query history.
+![Qube Database Explorer](docs/screenshots/er.png)
 
-![Qube SQL Editor](./docs/screenshots/sql-editor.png)
+### Table editor
 
-### API Manager
-Interactive documentation and client examples auto-derived from your project's database tables.
+Browse table rows and inspect their columns.
 
-![Qube API Manager](./docs/screenshots/api-manager.png)
+![Qube table editor](docs/screenshots/table.png)
 
----
+### SQL editor
 
-## Features
+Write project-scoped SQL and run queries.
 
-### ⚡ Real-Time Data Streaming
-Transform PostgreSQL into a reactive, event-driven backend without external message brokers.
+![Qube SQL editor](docs/screenshots/sql.png)
 
-- **Zero-Lag Postgres Triggers**: Seamlessly injects PL/pgSQL triggers (`AFTER INSERT OR UPDATE OR DELETE`) directly into project schemas to capture row-level changes automatically.
-- **Postgres `LISTEN` / `NOTIFY`**: Transmits structured mutation payloads (`type`, `table`, `record`, `oldRecord`, `projectId`, `timestamp`) over dedicated project channels using native PostgreSQL notification mechanisms.
-- **WebSocket Gateway (`/realtime`)**: High-throughput NestJS Socket.IO gateway that maps PostgreSQL notification channels to project and table rooms.
-- **Granular Table Toggles**: Enable or disable real-time streaming per table with a single toggle in the UI or via REST API endpoints (`POST/DELETE .../realtime/:tableName/enable`).
-- **Interactive Event Inspector**: Monitor live database activity in real time with operation badges (green for `INSERT`, yellow for `UPDATE`, red for `DELETE`), relative timestamps, and expandable JSON payload diffs.
-- **Secure Authentication**: WebSocket connections are authenticated using project JWT keys (`anonKey` or `serviceRoleKey`), isolating streams strictly by project scope.
+### API explorer
 
-#### Client-Side SDK
-Use the Qube JavaScript SDK for database queries, realtime subscriptions, and
-storage operations. See the [SDK guide](packages/qube-js/README.md) for setup,
-CRUD examples, realtime table configuration, and storage usage.
+Review generated table endpoints, HTTP methods, and project API keys.
 
-```typescript
-import { createClient } from "qube-js";
-
-const qube = createClient(
-  "http://localhost:3000/api/projects/my-project",
-  "YOUR_PROJECT_ANON_KEY",
-);
-
-const unsubscribe = qube.realTime.subscribe("users", (event) => {
-  console.log(`[${event.type}] on ${event.table}:`, event.record);
-});
-
-// Call unsubscribe() when the listener is no longer needed.
-```
-
-### Organizations and projects
-
-- Create organizations and isolate project workspaces.
-- Invite team members via email, assign `admin` or `developer` roles, and manage permissions.
-- Protect operations using cookie-based JWT authentication and organization-role guards.
-- Automatically provision an isolated PostgreSQL schema and distinct project API keys (`anon` and `service_role`) upon project creation.
-
-### PostgreSQL database workspace
-
-- Browse tables in a project's schema and inspect columns, defaults, primary keys, and foreign-key relationships.
-- Create and delete tables; add and drop columns.
-- Support for `text`, `integer`, `bigint`, `boolean`, `timestamp`, `uuid`, `jsonb`, and `numeric` column types.
-- Configure nullability, defaults, primary keys (including composite keys), and foreign-key constraints.
-- Browse paginated rows and update row values by primary-key column directly from the Table Editor.
-
-### SQL Editor
-
-- Write and run queries directly against your isolated project schema context.
-- View returned columns, rows, command metadata, execution duration, and error diagnostics.
-- Store and retrieve the 50 most recent query-history entries per project.
-- Safety guardrails: rejects multi-statement requests and prevents destructive database-level commands like `DROP DATABASE`, `DROP SCHEMA`, and `TRUNCATE`.
-
-### Generated REST API
-
-Each table created in a project's schema is automatically exposed through the project's REST interface without manual configuration.
-
-For a table named `users`, Qube exposes:
-
-```text
-GET     /api/projects/:projectSlug/rest/users
-POST    /api/projects/:projectSlug/rest/users
-PATCH   /api/projects/:projectSlug/rest/users/:id
-DELETE  /api/projects/:projectSlug/rest/users/:id
-```
-
-- `GET` accepts an anonymous project key and supports field selection, relational filtering (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `is`), sorting, limit, and offset pagination.
-- `POST`, `PATCH`, and `DELETE` endpoints are guarded by the project service-role key.
-
-## JavaScript SDK
-
-`qube-js` is the browser client for project database queries, realtime
-subscriptions, storage, and auth helpers. The full guide is also available in
-[`packages/qube-js/README.md`](packages/qube-js/README.md).
-
-### Install and initialize
-
-In this pnpm workspace, add the package to an app and build it before importing
-it (the package entry points resolve from `dist/`):
-
-```bash
-pnpm --filter web add qube-js@workspace:*
-pnpm --filter qube-js build
-```
-
-Create a client with the project API URL, ending at the project slug, and a
-project key:
-
-```ts
-import { createClient } from "qube-js";
-
-const qube = createClient(
-  "http://localhost:3000/api/projects/my-project",
-  process.env.NEXT_PUBLIC_QUBE_PROJECT_KEY!,
-);
-```
-
-The SDK appends REST and storage paths. The API must allow the web app's origin
-through CORS. Anonymous keys can read and subscribe to realtime; writes require
-a service-role key. A service-role key grants write access, so keep it on a
-trusted server and out of public browser apps.
-
-SDK calls return `{ data, error }`: successful calls have data and `error: null`;
-failed calls have `data: null` and an error message.
-
-### Database queries
-
-Queries support `.execute()` and can also be awaited directly:
-
-```ts
-type User = { id: string; email: string; name: string | null };
-
-const { data, error } = await qube
-  .from<User>("users")
-  .select("id,email,name")
-  .eq("email", "sam@example.com")
-  .order("name", "asc")
-  .limit(10)
-  .execute();
-
-if (error) console.error(error);
-else console.log(data); // User[]
-```
-
-Available read methods are `.select(columns)`, `.eq()`, `.noteq()`, `.gt()`,
-`.gte()`, `.lt()`, `.lte()`, `.like()`, `.ilike()`, `.is()`, `.order()`,
-`.limit()`, and `.offset()`. Reads return arrays. Inserts return the created
-row, while updates and deletes return the affected row:
-
-```ts
-const inserted = await qube
-  .from<User>("users")
-  .insert({ email: "sam@example.com", name: "Sam" })
-  .execute();
-
-const updated = await qube
-  .from<User>("users")
-  .update({ name: "Sam Q." })
-  .eq("id", "row-uuid")
-  .execute();
-
-const deleted = await qube
-  .from<User>("users")
-  .delete()
-  .eq("id", "row-uuid")
-  .execute();
-```
-
-Updates and deletes require `.eq("id", rowId)`. The API applies that ID to the
-table's primary key. The builder supports one filter per column; setting a
-second filter for the same column replaces the first.
+![Qube API explorer](docs/screenshots/api.png)
 
 ### Realtime
 
-Enable realtime for the table in the Qube project first. Subscribe to changes
-and optionally track connection status like this:
+Manage table subscriptions and watch database changes arrive live.
 
-```ts
-const unsubscribe = qube.realTime.subscribe(
-  "users",
-  (event) => console.log(event.type, event.record, event.oldRecord),
-  (status, message) => console.log(status, message),
-);
+![Qube realtime table subscriptions](docs/screenshots/realtime3.png)
 
-// Call when the listener is no longer needed.
-unsubscribe();
+The analytics view also summarizes realtime connections, subscriptions, and event deliveries.
 
-// Or close the socket and clear all subscriptions on this client.
-qube.realTime.disconnect();
-```
-
-Statuses are `connecting`, `connected`, `disconnected`, and `error`. Events
-have a `type` of `INSERT`, `UPDATE`, or `DELETE`, plus `table`, `record`,
-`projectId`, and `timestamp`. Updates and deletes also include `oldRecord`.
-Realtime uses Socket.IO at the API host's `/realtime` namespace. Browser pages
-must use HTTP(S), and the API must allow their origin.
+![Qube realtime analytics](docs/screenshots/realtime1.png)
 
 ### Storage
 
-Create the bucket in Qube first. Listing and signed URL access use the project
-key; upload and delete require a service-role key. Upload accepts a browser
-`File` and requires UploadThing to be configured on the API:
+Browse project buckets and the objects they contain.
 
-```ts
-const bucket = qube.storage.from("avatars");
+![Qube project storage](docs/screenshots/storage.png)
 
-const listed = await bucket.list();
-const uploaded = await bucket.upload(fileInput.files![0]);
-const signed = uploaded.data
-  ? await bucket.getSignedUrl(uploaded.data.id)
-  : null;
+### Analytics and performance
 
-if (uploaded.error) console.error(uploaded.error);
-```
+Review instrumented API activity, outcomes, latency, and recent events over a selected time range.
 
-The bucket methods also include `remove(objectId)` and
-`getSignedUrl(objectId)`. They return `{ data, error }`.
+![Qube analytics overview](docs/screenshots/dashboard.png)
 
-### Authentication
+Inspect API and SQL latency percentiles, request volume, and slow query fingerprints.
 
-The client exposes `qube.auth.signIn`, `signUp`, `signOut`, `getUser`,
-`signInWithGoogle`, and `signInWithGithub`. Auth uses API cookies and browser
-credentials. Magic-link sign-in is not supported. The current `signUp` method
-sends email and password, while the API registration DTO also requires a name,
-so signup needs that contract aligned before it can succeed.
+![Qube performance and latency](docs/screenshots/performence.png)
+
+When adding screenshots, place sanitized PNG or WebP files in `docs/screenshots/`, use descriptive filenames, and remove personal data, tokens, email addresses, and database credentials before committing them.
+
+## Capabilities
+
+- **Organizations and membership:** create organizations, invite members, and assign organization roles.
+- **Project isolation:** each project gets its own PostgreSQL schema and separate anonymous and service-role project keys.
+- **Schema workspace and ER diagram:** inspect tables and relationships in a visual database explorer; view columns, keys, indexes, estimated row counts, and suggested relationships; create tables and columns; manage supported constraints and defaults.
+- **Table editor:** browse paginated rows and update data by primary key.
+- **SQL editor:** run project-scoped SQL and review execution results, timing, errors, and query history.
+- **Generated REST API:** access project tables through authenticated REST routes without writing a controller for each table.
+- **Realtime:** enable table triggers and stream `INSERT`, `UPDATE`, and `DELETE` events through a Socket.IO gateway.
+- **Storage:** manage project buckets and objects through the API and optional UploadThing integration.
+- **Analytics and Observatory:** review instrumented API, SQL, and realtime activity, including request volume, outcomes, latency, slow query fingerprints, and recent events across selectable time ranges.
+- **JavaScript SDK:** query project REST endpoints, listen for realtime events, and use storage helpers with [`qube-js`](packages/qube-js/README.md).
 
 ## Architecture
 
-```text
-                             ┌──────────────────────────────────────────────┐
-                             │               Next.js Web App                │
-                             │  Dashboard · Table Editor · Monaco SQL UI    │
-                             │   API Explorer · Live Real-Time Inspector    │
-                             └──────────────┬───────────────────────▲───────┘
-                                            │ HTTP + Cookies        │ WebSockets
-                                            ▼                       │ (/realtime)
-                             ┌──────────────────────────────────────┴───────┐
-                             │                  NestJS API                  │
-                             │   Auth · Orgs · Projects · Table REST APIs   │
-                             │       Realtime Gateway & Trigger Mgmt        │
-                             └──────────────┬───────────────────────▲───────┘
-                                            │ Direct SQL / ORM      │
-                                            │ Drizzle               │ LISTEN / NOTIFY
-                                            ▼                       │ (pg_notify)
-                         ┌──────────────────────────────────────────┴───────┐
-                         │       PostgreSQL (Neon Serverless Driver)        │
-                         │    Application Metadata + Isolated Project       │
-                         │             Schemas & Triggers                   │
-                         └──────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  subgraph Compose[Docker Compose deployment]
+    Migrate[One-shot migration job]
+    Web[Next.js dashboard :3001]
+    API[NestJS API :3000]
+    Migrate -->|success required| API
+    Migrate -->|success required| Web
+  end
+  Browser[Browser / qube-js] -->|HTTP and cookies| Web
+  Browser -->|REST| API
+  Browser -->|Socket.IO /realtime| API
+  Web -->|server-side HTTP| API
+  API -->|Neon HTTP driver / Drizzle| DB[(External PostgreSQL / Neon)]
+  API -->|pg LISTEN / NOTIFY| DB
 ```
 
-The backend stores application metadata—users, organizations, memberships, projects, and query history—in PostgreSQL using Drizzle ORM. Each project operates inside its own PostgreSQL schema, which powers the Table Editor, SQL Editor, generated REST APIs, and event-trigger pipelines.
+The app container runs the web server and API under a small process supervisor. PostgreSQL is external; Compose does not start a database container. The Compose `migrate` service runs once before the app service. It uses the existing Drizzle SQL migration files, logs connection or SQL errors, and takes a PostgreSQL advisory lock to serialize migration jobs.
 
-## Tech stack
+The API's application data access uses Drizzle ORM and the Neon serverless driver. The migration runner and realtime listener use PostgreSQL connections through `pg`. Realtime notifications are emitted by PostgreSQL triggers and delivered through `LISTEN` / `NOTIFY` to the Socket.IO gateway.
 
-| Area | Technologies |
+### Main application routes
+
+The API uses the `/api` global prefix.
+
+| Purpose | Route examples |
 | --- | --- |
-| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4, Radix UI, TanStack Table, Monaco Editor, Socket.IO Client |
-| Backend | NestJS 11, Express platform, Socket.IO Gateway, WebSocket (`ws`), TypeScript |
-| Real-Time Engine | PostgreSQL `LISTEN` / `NOTIFY`, PL/pgSQL Triggers, Neon WebSocket Driver |
-| Database | PostgreSQL via the Neon serverless driver |
-| Data access and migrations | Drizzle ORM and Drizzle Kit |
-| Authentication | JWT, HTTP cookies, bcrypt; Google and GitHub OAuth flows |
-| Validation | class-validator / class-transformer (API), Zod and React Hook Form (web) |
-| Email | Resend organization invitations |
-| Tooling | ESLint, Prettier, Jest, Dockerfiles for web and API, Wrangler deployment |
-| Workspace | pnpm workspaces with shared `@qube/constants` and `@qube/types` packages |
+| Health | `GET /api/health` |
+| Authentication | `/api/auth/register`, `/api/auth/login`, `/api/auth/me` |
+| Organizations | `/api/orgs` |
+| Projects | `/api/orgs/:orgSlug/projects` |
+| Project table REST | `/api/projects/:projectSlug/rest/:table` |
+| Table management | `/api/orgs/:orgSlug/projects/:projectSlug/tables` |
+| SQL editor | `/api/orgs/:orgSlug/projects/:projectSlug/sql` |
+| Realtime controls | `/api/orgs/:orgSlug/projects/:projectSlug/realtime/:tableName/enable` |
+| Storage | Project and organization-scoped bucket and object routes |
 
-## Project structure
+Project REST reads accept a project key. Writes require a service-role project key. Dashboard routes use the user's authentication cookie and organization membership.
+
+## Repository layout
 
 ```text
 .
 ├── apps/
 │   ├── api/
-│   │   ├── drizzle/                 # Drizzle migrations and metadata
+│   │   ├── drizzle/                 # SQL migrations, snapshots, and journal
 │   │   ├── src/
-│   │   │   ├── auth/                # Authentication & OAuth strategies
-│   │   │   ├── db/                  # Drizzle database connection and schema
-│   │   │   ├── members/             # Memberships and invitations
-│   │   │   ├── orgs/                # Organization management
-│   │   │   ├── project-api/         # Dynamic REST endpoints per table
-│   │   │   ├── projects/            # Project & schema provisioning
-│   │   │   ├── real-time/           # WebSocket gateway, LISTEN/NOTIFY & triggers
-│   │   │   ├── sql-editor/          # Query execution and history
-│   │   │   └── table-editor/        # Schema inspection, DDL & row CRUD
-│   │   └── test/
+│   │   │   ├── analytics/            # Project activity and schema analytics
+│   │   │   ├── auth/                 # Password, cookie, JWT, and OAuth flows
+│   │   │   ├── db/schema/            # Drizzle metadata schema definitions
+│   │   │   ├── members/              # Organization membership and invites
+│   │   │   ├── orgs/                 # Organization endpoints and services
+│   │   │   ├── project-api/          # Dynamic project table REST API
+│   │   │   ├── projects/             # Project and schema provisioning
+│   │   │   ├── real-time/            # Triggers, listener, and Socket.IO gateway
+│   │   │   ├── schema-introspection/ # Project schema inspection
+│   │   │   ├── sql-editor/           # SQL execution and history
+│   │   │   ├── storage/              # Buckets and objects
+│   │   │   └── table-editor/         # Table, column, and row operations
+│   │   └── test/                     # API end-to-end tests
 │   └── web/
-│       ├── src/app/                 # Next.js App Router pages & layouts
-│       ├── src/components/          # UI primitives and shared components
-│       ├── src/features/            # Organizations, projects, tables, SQL, Realtime
-│       │   └── realtime/            # Realtime dashboard client and streaming hooks
-│       └── public/
+│       └── src/
+│           ├── app/                  # Next.js App Router pages
+│           ├── components/           # Shared UI components
+│           ├── features/             # Dashboard feature modules
+│           └── lib/                  # Browser and server helpers
 ├── docs/
-│   └── screenshots/                 # Application screenshots & UI previews
+│   ├── reports/                      # Engineering notes and reports
+│   └── screenshots/                  # README and product screenshots
 ├── packages/
-│   ├── qube-js/                   # Browser JavaScript SDK and usage guide
-│   ├── constants/                   # Shared event names, roles, and tokens
-│   └── types/                       # Shared TypeScript interfaces & DTOs
-├── package.json
-├── pnpm-workspace.yaml
-└── README.md
+│   ├── constants/                    # Shared constants
+│   ├── qube-js/                      # JavaScript SDK and its guide
+│   └── types/                        # Shared TypeScript types
+├── scripts/
+│   ├── qube                         # Self-host install and lifecycle CLI
+│   ├── run-qube-container.cjs       # App and migration process supervisor
+│   └── run-qube-migrations.cjs      # Locked migration runner with error output
+├── docker-compose.yml
+├── Dockerfile
+├── pnpm-lock.yaml
+└── pnpm-workspace.yaml
 ```
 
-## Getting started
+## Developer setup
 
-### Prerequisites
+### Requirements
 
-- Node.js (v20+ LTS recommended).
-- pnpm (`pnpm install -g pnpm`).
-- PostgreSQL database reachable via connection string (Neon or standard PostgreSQL).
+- Node.js 22 (the Docker images use Node 22).
+- pnpm with support for the repository's pnpm 9 lockfile format; the Docker build uses pnpm 11.3.0 through Corepack.
+- A Neon PostgreSQL database for the API. The self-host installer supports Neon connection URIs.
+- OpenSSL for generating local application secrets.
+
+### Install dependencies
 
 ```bash
 git clone <repository-url>
 cd Qube
-pnpm install
+corepack enable
+pnpm install --frozen-lockfile
 ```
 
-### Environment configuration
+The `qube-js` workspace package exposes built files from `packages/qube-js/dist`. Build it before the first web build or when changing the SDK:
 
-Configure environment variables for both the API and Web applications.
+```bash
+pnpm --filter qube-js build
+```
 
-`apps/api/.env`:
+### Configure the API
 
-```text
+Create `apps/api/.env` for local development. Keep this file untracked and do not copy production credentials into examples or commits.
+
+```dotenv
 PORT=3000
-WEB_URL=http://localhost:3001
+DATABASE_URL=postgresql://USER:ENCODED_PASSWORD@YOUR_ENDPOINT.neon.tech/DATABASE?sslmode=verify-full
+REALTIME_DATABASE_URL=
+
 API_URL=http://localhost:3000/api
 PUBLIC_API_URL=http://localhost:3000/api
-DATABASE_URL=postgresql://user:pass@host/db?sslmode=require
-REALTIME_DATABASE_URL=postgresql://user:pass@host/db?sslmode=require # Optional direct URL (unpooled) for LISTEN/NOTIFY
-JWT_ACCESS_SECRET=your_jwt_access_secret
-JWT_REFRESH_SECRET=your_jwt_refresh_secret
+WEB_URL=http://localhost:3001
+
+JWT_ACCESS_SECRET=replace-with-a-random-secret
+JWT_REFRESH_SECRET=replace-with-a-different-random-secret
+PROJECT_JWT_SECRET=replace-with-a-third-random-secret
+INVITE_SECRET=replace-with-a-fourth-random-secret
 JWT_ACCESS_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
+
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
 GOOGLE_CALLBACK_URL=http://localhost:3000/api/auth/google/callback
-GITHUB_CLIENT_ID=your_github_client_id
-GITHUB_CLIENT_SECRET=your_github_client_secret
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
 GITHUB_CALLBACK_URL=http://localhost:3000/api/auth/github/callback
-RESEND_API_KEY=your_resend_api_key
-INVITE_SECRET=your_invite_secret
-PROJECT_JWT_SECRET=your_project_jwt_secret
+RESEND_API_KEY=
+UPLOADTHING_TOKEN=
 ```
 
-> **Note on `REALTIME_DATABASE_URL`**: When using pooled connections (such as Neon Connection Pooler or PgBouncer in transaction mode), PostgreSQL `LISTEN`/`NOTIFY` requires a direct, unpooled connection. Qube will automatically fall back to `DATABASE_URL` (stripping `-pooler` if present) or use `REALTIME_DATABASE_URL` if explicitly set.
+Use four distinct random secrets. For example, generate each value separately with `openssl rand -hex 32`. Percent-encode reserved characters in database credentials. `sslmode=verify-full` keeps certificate and hostname verification enabled.
 
-`apps/web/.env`:
+`REALTIME_DATABASE_URL` is optional. When the main database URI uses a transaction pooler, provide a direct, unpooled URI here for PostgreSQL `LISTEN` / `NOTIFY`.
 
-```text
+### Configure the web app
+
+Create `apps/web/.env.local`:
+
+```dotenv
 NEXT_PUBLIC_API_URL=http://localhost:3000/api
 API_URL=http://localhost:3000/api
+JWT_ACCESS_SECRET=the-same-value-as-the-api
 ```
 
-Apply database migrations:
+`NEXT_PUBLIC_API_URL` is compiled into browser JavaScript. `API_URL` is used by server-side web code. The web proxy also needs the API's `JWT_ACCESS_SECRET` to verify the access cookie.
+
+### Apply migrations and start development servers
+
+Apply migrations after the API environment points at the intended development database:
 
 ```bash
 pnpm --filter api db:migrate
 ```
 
-For local Docker installation and lifecycle commands, see [SELF_HOSTING.md](./SELF_HOSTING.md). Observatory schema discovery and telemetry are available in project navigation after migrations are applied.
-
-Start the development servers:
+Start both apps from the repository root:
 
 ```bash
 pnpm dev
 ```
 
-Or run them individually:
+Or start them separately:
 
 ```bash
-pnpm dev:api   # NestJS API on http://localhost:3000
-pnpm dev:web   # Next.js web application on http://localhost:3001
+pnpm dev:api   # http://localhost:3000/api
+pnpm dev:web   # http://localhost:3001
 ```
 
-## Development commands
+Check API readiness at `http://localhost:3000/api/health`. The API and web app both need access to the configured database for normal dashboard use.
+
+## Environment variables
+
+| Variable | Required | Used by | Notes |
+| --- | --- | --- | --- |
+| `DATABASE_URL` | Yes | API and migration job | PostgreSQL/Neon URI. Use TLS and verify the server certificate. |
+| `REALTIME_DATABASE_URL` | No | Realtime listener | Prefer a direct, unpooled connection for `LISTEN` / `NOTIFY`. |
+| `JWT_ACCESS_SECRET` | Yes | API and web proxy | Must match in both processes. |
+| `JWT_REFRESH_SECRET` | Yes | API | Signs refresh tokens. |
+| `PROJECT_JWT_SECRET` | Yes | API | Signs and verifies project API keys. |
+| `INVITE_SECRET` | Yes | API | Signs organization invite tokens. |
+| `PORT` | No | API | Defaults to `3000`. |
+| `WEB_URL` | No | API | Dashboard origin used for CORS; local default is `http://localhost:3001`. |
+| `API_URL` | No | Web/API | Internal API URL for server-side requests. |
+| `PUBLIC_API_URL` | No | API and web build | Public API base URL used in generated project links and browser calls. |
+| `NEXT_PUBLIC_API_URL` | No | Web build | Browser-visible API URL; baked into the Next.js build. |
+| `JWT_ACCESS_EXPIRES_IN` | No | API | Defaults to `15m`. |
+| `JWT_REFRESH_EXPIRES_IN` | No | API | Defaults to `7d`. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL` | No | API | Google OAuth settings. Callback must match the provider configuration. |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_CALLBACK_URL` | No | API | GitHub OAuth settings. Callback must match the provider configuration. |
+| `RESEND_API_KEY` | No | API | Enables invitation email delivery. |
+| `UPLOADTHING_TOKEN` | No | API | Enables UploadThing-backed object operations. |
+
+The Docker installer writes its protected configuration to `.qube/.env`. Local development uses `apps/api/.env` and `apps/web/.env.local`; these configurations serve different workflows and should not be copied over each other blindly.
+
+## Run Qube with Docker
+
+For a fresh self-hosted installation, use the interactive installer from the repository checkout:
+
+```bash
+./scripts/qube install
+```
+
+The installer collects a Neon URI and initial administrator details, generates application secrets, builds the image, runs the one-shot migration service, starts the app container, waits for API and web health checks, and registers the administrator. The migration job must finish successfully before the app starts.
+
+The dashboard and API default to `http://localhost:3001` and `http://localhost:3000/api`. PostgreSQL is external; Qube does not create or reset a database. The installer stores its config in `.qube/.env` with restricted file permissions. It converts accepted Neon `sslmode=require` values to `sslmode=verify-full` so TLS certificate checks remain explicit.
+
+Lifecycle commands:
+
+```bash
+./scripts/qube start
+./scripts/qube stop
+./scripts/qube restart
+./scripts/qube status
+./scripts/qube logs
+./scripts/qube update
+./scripts/qube backup [backup.dump]
+./scripts/qube restore backup.dump
+./scripts/qube uninstall
+```
+
+The `migrate` service does not restart on failure. `./scripts/qube logs` includes migration and app logs. Backups and restores use PostgreSQL client tools in the app image. `uninstall` removes Qube's container resources and does not delete the external database. See [SELF_HOSTING.md](SELF_HOSTING.md) for deployment, configuration, backup, and troubleshooting details.
+
+## Database development and migrations
+
+The API's Drizzle schema definitions are in `apps/api/src/db/schema/`. The SQL migration history and Drizzle snapshots are in `apps/api/drizzle/`.
+
+For a schema change:
+
+1. Update the relevant TypeScript schema definition and exports.
+2. Generate a migration from the API workspace:
+
+   ```bash
+   pnpm --filter api db:generate
+   ```
+
+3. Review the generated SQL, snapshot, and `meta/_journal.json` entry. Treat the SQL as a reviewed deployment change.
+4. Test it against a disposable development database or a backed-up staging database.
+5. Commit the new SQL and metadata files together.
+
+Apply pending migrations in local development with:
+
+```bash
+pnpm --filter api db:migrate
+```
+
+For Docker deployments, Compose runs `scripts/run-qube-migrations.cjs` as a one-shot service before the application. The runner uses the checked-in migration directory, the same `drizzle` migration schema/table used by Drizzle ORM, and a PostgreSQL advisory lock. A failed migration exits non-zero, prints the original database error, and prevents app startup.
+
+Do not rewrite or delete migrations that may have run in an existing environment. Do not use `db:push` as a production migration strategy. If the database and migration ledger disagree, take a backup and compare the ledger, live schema, and the exact migration SQL before deciding on a manual recovery.
+
+## Application and SDK development
+
+### API
+
+The API is a NestJS application. Each feature generally keeps its controller, service, and module together under `apps/api/src/`. Add routes to the relevant feature module rather than creating unrelated cross-feature dependencies. The global `/api` prefix is set in `apps/api/src/main.ts`.
+
+The API health route is `GET /api/health`. Authenticated dashboard routes use JWT cookies and organization membership guards. Project REST routes use project JWT keys and enforce read/write roles in `ProjectKeyGuard` and the controller.
+
+### Web app
+
+The dashboard is a Next.js App Router app under `apps/web/src/app/`. Feature-specific UI and server actions live under `apps/web/src/features/`; shared UI elements live under `apps/web/src/components/`.
+
+Browser requests use `NEXT_PUBLIC_API_URL`. Server-side requests use `API_URL`. For a Docker image, `NEXT_PUBLIC_API_URL` is a build argument, so rebuild the image after changing it.
+
+### Shared packages
+
+- `@qube/constants`: shared role names and event/auth constants.
+- `@qube/types`: shared API, event, and SDK types.
+- `qube-js`: project client SDK, built from `packages/qube-js/`.
+
+The `qube-js` package exports from `dist/`; build it before running a web production build after a clean clone. The root Docker build already builds `qube-js`, then the API, then the web app.
+
+For SDK functionality, installation, query examples, realtime, storage, and authentication notes, see the [Qube JavaScript SDK guide](SDK.md). The package's implementation-oriented usage notes are also in [`packages/qube-js/README.md`](packages/qube-js/README.md).
+
+### Project REST example
+
+Project keys are sent as bearer tokens. Anonymous keys are intended for reads. Writes require the service-role key, which must remain server-side:
+
+```bash
+curl 'http://localhost:3000/api/projects/PROJECT_SLUG/rest/users?limit=10' \
+  -H 'Authorization: Bearer PROJECT_ANON_KEY'
+```
+
+The project REST API supports `GET`, `POST`, `PATCH`, and `DELETE` per table. See the API Explorer in the dashboard for the available query options and generated examples.
+
+## Commands
 
 | Command | Description |
 | --- | --- |
-| `pnpm dev` | Start the API and web development servers concurrently. |
+| `pnpm install --frozen-lockfile` | Install the locked workspace dependencies. |
+| `pnpm dev` | Start API and web development processes concurrently. |
 | `pnpm dev:api` | Start the NestJS API in watch mode. |
-| `pnpm dev:web` | Start the Next.js app on port 3001. |
-| `pnpm --filter api build` | Build the API for production. |
-| `pnpm --filter web build` | Build the Next.js web app. |
-| `pnpm --filter api lint` | Run API ESLint with auto-fix. |
-| `pnpm --filter web lint` | Run web ESLint checks. |
+| `pnpm dev:web` | Start Next.js on port `3001`. |
+| `pnpm --filter qube-js build` | Build SDK ESM, CommonJS, and type outputs. |
+| `pnpm --filter api build` | Compile the API into `apps/api/dist/`. |
+| `pnpm --filter web build` | Build the web app for production; build `qube-js` first on a clean checkout. |
+| `pnpm --filter api db:generate` | Generate SQL migration and metadata from schema changes. |
+| `pnpm --filter api db:migrate` | Apply pending migrations to the configured development database. |
+| `pnpm --filter api db:push` | Directly push a schema in a development workflow; avoid for production. |
+| `pnpm --filter api db:studio` | Open Drizzle Studio for the configured database. |
 | `pnpm --filter api test` | Run API unit tests. |
 | `pnpm --filter api test:e2e` | Run API end-to-end tests. |
-| `pnpm --filter api db:generate` | Generate Drizzle migrations from schema changes. |
-| `pnpm --filter api db:migrate` | Apply pending Drizzle migrations. |
-| `pnpm --filter api db:push` | Push schema changes directly to the database. |
-| `pnpm --filter api db:studio` | Launch Drizzle Studio GUI. |
-| `pnpm deploy:web` | Deploy web frontend via Wrangler. |
+| `pnpm --filter web lint` | Run web ESLint. |
+| `pnpm --filter api lint` | Run API ESLint; the current script applies fixes. |
+| `pnpm deploy:web` | Deploy the web package through Wrangler. |
 
-## Core workflow
+## Testing and verification
 
-1. **Sign Up & Workspace Setup**: Register or authenticate via OAuth, then create an organization.
-2. **Project Provisioning**: Create a project; Qube isolates a dedicated PostgreSQL schema and issues project `anon` and `service_role` keys.
-3. **Design Schema**: Use the visual Table Editor to create tables, columns, primary keys, and foreign keys.
-4. **Data Management**: Browse, sort, and perform row-level edits in the Table Editor.
-5. **Run Queries**: Use the Monaco SQL Editor to run arbitrary SQL statements against the project schema and review query execution logs.
-6. **Enable Real-Time Streaming**: Navigate to the **Realtime** tab, toggle listening on desired tables, and observe live change streams as rows are created, updated, or deleted.
-7. **Consume REST APIs**: Use auto-generated REST endpoints with your project keys or subscribe frontend clients to the `/realtime` WebSocket gateway.
+Run checks relevant to the change. API tests are defined in `apps/api/package.json`; end-to-end tests may require a configured database and running services.
 
-## Security considerations
+```bash
+pnpm --filter api test
+pnpm --filter api test:e2e
+pnpm --filter web lint
+pnpm --filter api build
+pnpm --filter qube-js build
+pnpm --filter web build
+```
 
-- **Secret Isolation**: Store `DATABASE_URL`, JWT secrets, OAuth credentials, Resend keys, and the project `service_role` key securely in server environment variables.
-- **Key Roles**: The `anon` key is designed for public/client use (reads and real-time client subscriptions). The `service_role` key bypasses read-only restrictions and must remain server-side.
-- **SQL Execution Safety**: SQL execution runs in authenticated project context. Qube restricts multi-statements and blocks destructive schema-wide commands (`DROP SCHEMA`, `DROP DATABASE`, `TRUNCATE`).
-- **WebSocket Project Scoping**: Real-time subscriptions are authenticated via project keys and bound to strict project rooms to prevent cross-tenant data leakage.
+For Docker changes, validate Compose and build the image before starting services:
 
-## Roadmap
+```bash
+docker compose config
+docker compose build
+```
 
-### Available today
-- Organization and team member management with role-based access
-- Isolated per-project PostgreSQL schemas
-- Visual table, column, and constraint management
-- Row inspection and inline primary-key updates
-- Monaco SQL Editor with execution timing and history
-- ⚡ **Real-Time change feeds with Postgres triggers and WebSocket streaming**
-- ⚡ **Live Real-Time Event Inspector in the dashboard**
-- Auto-generated table REST endpoints and documentation
+Starting Compose runs the migration job against the `DATABASE_URL` in the Compose environment. Use a disposable or backed-up database when verifying migrations. A successful image build does not verify database connectivity or migration compatibility.
 
-### Potential improvements
-- API key rotation and fine-grained scopes
-- Row-Level Security (RLS) integration for client queries and real-time feeds
-- OpenAPI (Swagger) export for project APIs
-- WebSocket presence and broadcast messaging channels
-- Rate limiting and usage analytics
-- Saved SQL snippets and intelligent query autocomplete
+## Security notes
+
+- Keep database credentials, JWT secrets, OAuth secrets, Resend keys, and UploadThing tokens out of git and browser bundles.
+- Use distinct, high-entropy application secrets. The access secret must match between API and web proxy configuration.
+- Keep service-role project keys on trusted servers. Do not place them in public web environment variables.
+- Use TLS with certificate and hostname verification for remote PostgreSQL connections. Do not solve certificate problems by disabling verification.
+- The SQL editor runs in project context and applies request validation, but it is still a privileged database tool. Grant dashboard accounts access only to organizations they should manage.
+- `PUBLIC_API_URL` and `NEXT_PUBLIC_API_URL` are public configuration values, not secret storage.
+- Keep `.qube/.env`, `apps/api/.env`, and `apps/web/.env.local` private. The Docker installer creates `.qube/.env` with restrictive permissions.
 
 ## Contributing
 
-Contributions are welcome! Please ensure that your changes adhere to the pnpm workspace conventions:
+1. Create a focused branch from the current project branch.
+2. Keep feature code in its owning app or package and follow the pnpm workspace layout.
+3. Add or update tests for behavior changes where the existing test structure supports them.
+4. For database schema changes, include the reviewed SQL migration, snapshot, and journal update. Never regenerate or remove applied migration history blindly.
+5. Run the relevant build, lint, and test commands and describe any checks that need external services.
+6. Do not commit credentials, private database data, or screenshots containing personal information.
 
-```bash
-pnpm --filter web lint
-pnpm --filter api lint
-pnpm --filter api test
-```
-
-If your change affects the database schema, generate and include the relevant Drizzle migration under `apps/api/drizzle/`. Do not add credentials or other secrets to commits.
-
-## License
-
-MIT / Private (see package descriptors).
+For a report, include the expected behavior, steps to reproduce, and sanitized logs or screenshots when useful.
