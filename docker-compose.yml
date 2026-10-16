@@ -1,4 +1,19 @@
 services:
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3000/api}
+    image: qube:local
+    container_name: ${QUBE_MIGRATION_CONTAINER_NAME:-qube-migrate}
+    command: ["node", "/app/scripts/run-qube-container.cjs", "migrate"]
+    restart: "no"
+    init: true
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .qube/.env}
+
   qube:
     build:
       context: .
@@ -7,8 +22,12 @@ services:
         NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3000/api}
     image: qube:local
     container_name: ${QUBE_CONTAINER_NAME:-qube}
+    command: ["node", "/app/scripts/run-qube-container.cjs", "start"]
     restart: unless-stopped
     init: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .qube/.env}

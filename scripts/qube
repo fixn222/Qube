@@ -143,6 +143,38 @@ wait_for_health() {
   fail "Qube did not become healthy. Review './scripts/qube logs' for diagnostics."
 }
 
+run_migrations() {
+  local container state exit_code attempt
+  if ! compose up -d --build migrate; then
+    compose logs --no-color migrate >&2 || true
+    fail "Qube migration job could not be started. Review the migration logs above."
+  fi
+
+  container="$(compose ps -aq migrate)"
+  [[ -n "$container" ]] || fail "Qube migration job container was not created."
+  for ((attempt=1; attempt<=900; attempt++)); do
+    state="$(docker inspect --format '{{.State.Status}}' "$container" 2>/dev/null || true)"
+    case "$state" in
+      exited|dead)
+        exit_code="$(docker inspect --format '{{.State.ExitCode}}' "$container" 2>/dev/null || printf '1')"
+        if [[ "$exit_code" != 0 ]]; then
+          compose logs --no-color migrate >&2 || true
+          fail "Qube database migrations failed (exit $exit_code). Review the migration logs above; the API was not started."
+        fi
+        printf 'Database migrations completed successfully.\n'
+        return 0
+        ;;
+      running|created|restarting) sleep 1 ;;
+      *)
+        compose logs --no-color migrate >&2 || true
+        fail "Qube migration job entered unexpected state '$state'. Review the migration logs above."
+        ;;
+    esac
+  done
+  compose logs --no-color migrate >&2 || true
+  fail "Qube migration job did not finish within 15 minutes. Review the migration logs above."
+}
+
 install_qube() {
   [[ -f "$COMPOSE_FILE" && -f "$ROOT_DIR/Dockerfile" ]] || fail "Run the installer from the Qube source or release directory."
   [[ ! -e "$ENV_FILE" ]] || fail "Existing config found at $ENV_FILE. It was left unchanged. Back it up or use the lifecycle commands."
@@ -188,8 +220,10 @@ install_qube() {
   [[ "$admin_password" == ????????* ]] || fail "Administrator password must be at least 8 characters."
   write_config "$database_uri" "$realtime_uri" "$web_port" "$api_port" "$web_url" "$public_api_url"
   unset database_uri realtime_uri google_client_secret github_client_secret resend_api_key uploadthing_token
-  printf '\nBuilding the single Qube image, applying migrations, and starting the container...\n'
-  compose up -d --build
+  printf '\nBuilding the Qube image and applying database migrations...\n'
+  run_migrations
+  printf 'Starting Qube...\n'
+  compose up -d qube
   wait_for_health
   TEMP_FILE="$(mktemp "$CONFIG_DIR/admin.XXXXXX")"
   chmod 600 "$TEMP_FILE"
@@ -218,7 +252,7 @@ case "$command_name" in
   stop) check_prerequisites; need_install; check_config_permissions; compose stop ;;
   restart) check_prerequisites; need_install; check_config_permissions; compose restart ;;
   status) check_prerequisites; need_install; check_config_permissions; compose ps ;;
-  logs) check_prerequisites; need_install; check_config_permissions; shift; compose logs --tail=200 -f qube "$@" ;;
+  logs) check_prerequisites; need_install; check_config_permissions; shift; compose logs --tail=200 -f qube migrate "$@" ;;
   update) check_prerequisites; need_install; check_config_permissions; compose up -d --build ;;
   backup)
     check_prerequisites; need_install; check_config_permissions

@@ -18,7 +18,9 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=dependencies /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=dependencies /app/apps/web/node_modules ./apps/web/node_modules
 COPY . .
-RUN pnpm --filter api build && pnpm --filter web build
+RUN pnpm --filter qube-js build \
+  && pnpm --filter api build \
+  && pnpm --filter web build
 
 FROM node:22-alpine AS runner
 ENV NODE_ENV=production

@@ -1,19 +1,33 @@
 const { spawn, spawnSync } = require('node:child_process');
 
 const root = '/app';
-const migration = spawnSync(
-  'pnpm',
-  ['--filter', 'api', 'db:migrate'],
-  { cwd: root, env: process.env, stdio: 'inherit' },
-);
+const mode = process.argv[2] || 'all';
 
-if (migration.error) {
-  console.error('Qube migration command could not start.');
-  process.exit(1);
+if (!['all', 'migrate', 'start'].includes(mode)) {
+  console.error(`Unknown Qube container mode: ${mode}`);
+  process.exit(2);
 }
-if (migration.status !== 0) {
-  console.error('Qube database migrations failed; applications were not started.');
-  process.exit(migration.status ?? 1);
+
+if (mode !== 'start') {
+  console.log('Running Qube database migrations...');
+  const migration = spawnSync(
+    'pnpm',
+    ['--filter', 'api', 'db:migrate'],
+    { cwd: root, env: process.env, stdio: 'inherit' },
+  );
+
+  if (migration.error) {
+    console.error('Qube migration command could not start:', migration.error.message);
+    process.exit(1);
+  }
+  if (migration.status !== 0) {
+    console.error(`Qube database migrations failed (exit ${migration.status ?? 'unknown'}); applications were not started.`);
+    process.exit(migration.status ?? 1);
+  }
+}
+
+if (mode === 'migrate') {
+  process.exit(0);
 }
 
 const api = spawn(process.execPath, ['/app/apps/api/dist/src/main.js'], {

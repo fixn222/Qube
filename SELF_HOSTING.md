@@ -14,16 +14,16 @@ The installer checks Docker and architecture, then asks for a Neon connection UR
 
 You can instead choose Neon discovery. The installer hides the Neon management API key, validates it with Neon, lists projects, and requests a connection URI for the selected project, database, role, and branch. It does not create Neon resources. Neon management credentials and SQL credentials are separate permissions.
 
-After selecting the DB, configure the dashboard/API host ports and public URLs, then enter the first Qube account. The installer generates four distinct signing secrets, writes the protected config, builds the single image, applies migrations, waits for API and web health checks, and registers the account. Re-running install leaves an existing config untouched.
+After selecting the DB, configure the dashboard/API host ports and public URLs, then enter the first Qube account. The installer generates four distinct signing secrets, writes the protected config, builds the image, runs the one-shot migration job, waits for API and web health checks, and registers the account. Re-running install leaves an existing config untouched.
 
 ## Container and ports
 
-Compose starts one service named `qube`, with one container and two localhost-bound ports:
+Compose runs a one-shot `migrate` service before the long-running `qube` service. The migration job must exit successfully before the API and web app start. The app container exposes two localhost-bound ports:
 
 - Dashboard: `http://localhost:3001`
 - API: `http://localhost:3000/api`
 
-The API binds to container port `3000`; Next.js binds to `3001`. Both processes run under a small supervisor with graceful shutdown. Docker health checks require both HTTP services to respond. Database migrations run before either process starts. The container runs as a non-root user and has no Docker socket mount.
+The API binds to container port `3000`; Next.js binds to `3001`. Both processes run under a small supervisor with graceful shutdown. Docker health checks require both HTTP services to respond. The app container runs as a non-root user and has no Docker socket mount. The migration job does not restart on failure; its logs remain available with `./scripts/qube logs`.
 
 The browser uses `PUBLIC_API_URL`, compiled into the web bundle. `API_URL` is set internally to `http://127.0.0.1:3000/api` for server-side web requests. `WEB_URL` is the browser-facing dashboard origin used for CORS and OAuth redirects. For a remote deployment, put TLS reverse proxy routes in front of the mapped ports, set `WEB_URL` and `PUBLIC_API_URL` to the public HTTPS origins, and keep the container ports bound to localhost. Rebuild with `./scripts/qube update` after changing `PUBLIC_API_URL`.
 

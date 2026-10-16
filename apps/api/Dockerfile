@@ -45,4 +45,7 @@ WORKDIR /app/apps/api
 USER node
 EXPOSE 3000
 
-CMD ["sh", "-c", "pnpm db:migrate && pnpm start:prod"]
+# Run `pnpm db:migrate` once as a deployment/release step before starting API
+# replicas. Keeping migrations out of this command avoids concurrent migration
+# attempts when the API is scaled or restarted.
+CMD ["pnpm", "start:prod"]
