@@ -71,7 +71,10 @@ export class InviteService {
       },
     );
 
-    const inviteUrl = `${this.configService.get<string>('API_URL')}/auth/invite/accept?token=${token}`;
+    const publicApiUrl =
+      this.configService.get<string>('PUBLIC_API_URL') ??
+      this.configService.get<string>('API_URL');
+    const inviteUrl = `${publicApiUrl}/auth/invite/accept?token=${token}`;
 
     // send the email via Resend
    const sended = await this.resend.emails.send({

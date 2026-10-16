@@ -1,20 +1,55 @@
-# Self-host Qube
+# Run Qube in one Docker container
 
-Qube uses the configured PostgreSQL database for its own users, organizations, projects, and the projects' schemas. In this deployment there is no separate Qube metadata database container. Neon is optional: use a Neon connection URI or another PostgreSQL URL. Realtime LISTEN/NOTIFY may require an unpooled `REALTIME_DATABASE_URL`.
+Qube runs its web app and API in **one container**. PostgreSQL remains an external service such as Neon; Qube does not launch a separate database container. Its user, organization, project, telemetry, and query-history metadata use the PostgreSQL database configured by `DATABASE_URL`.
 
-## Local source installation
+## Install from a source checkout
 
-Requirements: Docker Engine, Docker Compose v2, `curl`, `jq`, and OpenSSL. For Neon project discovery, the installer calls the official Neon API; it does not create Neon projects or persistent resources.
-
-From the repository root:
+Requirements on the host: Docker Engine, Docker Compose v2, `curl`, `jq`, and OpenSSL. For database backup/restore, the runtime image includes PostgreSQL client tools.
 
 ```sh
 ./scripts/qube install
 ```
 
-The installer prompts for a PostgreSQL URL, or offers Neon API key validation and existing project selection. The Neon key is entered without terminal echo and only held in a mode 0600 temporary file while requests are made. The installer asks for the database and role names required to retrieve a connection URI. It never creates a Neon project. The API runs migrations before startup, and the installer creates the initial account through Qube registration after health checks pass.
+The installer checks Docker and architecture, then asks for a database URI. For the manual URI prompt, terminal input is visible while typing/pasting, as requested. Paste a URI with percent-encoded special characters. Do not share terminal recordings or transcripts that contain it. The URI is stored in `.qube/.env`, mode `0600`, under a mode `0700` directory.
 
-The configuration is stored in `.qube/.env` with mode 0600. Do not commit it. The dashboard and API ports are bound to localhost by default (`3001` and `3000`). Qube's database is external and durable; this Compose stack does not create or own a database volume.
+You can instead choose Neon discovery. The installer hides the Neon management API key, validates it with Neon, lists projects, and requests a connection URI for the selected project, database, role, and branch. It does not create Neon resources. Neon management credentials and SQL credentials are separate permissions.
+
+After selecting the DB, configure the dashboard/API host ports and public URLs, then enter the first Qube account. The installer generates four distinct signing secrets, writes the protected config, builds the single image, applies migrations, waits for API and web health checks, and registers the account. Re-running install leaves an existing config untouched.
+
+## Container and ports
+
+Compose starts one service named `qube`, with one container and two localhost-bound ports:
+
+- Dashboard: `http://localhost:3001`
+- API: `http://localhost:3000/api`
+
+The API binds to container port `3000`; Next.js binds to `3001`. Both processes run under a small supervisor with graceful shutdown. Docker health checks require both HTTP services to respond. Database migrations run before either process starts. The container runs as a non-root user and has no Docker socket mount.
+
+The browser uses `PUBLIC_API_URL`, compiled into the web bundle. `API_URL` is set internally to `http://127.0.0.1:3000/api` for server-side web requests. `WEB_URL` is the browser-facing dashboard origin used for CORS and OAuth redirects. For a remote deployment, put TLS reverse proxy routes in front of the mapped ports, set `WEB_URL` and `PUBLIC_API_URL` to the public HTTPS origins, and keep the container ports bound to localhost. Rebuild with `./scripts/qube update` after changing `PUBLIC_API_URL`.
+
+## Credentials and configuration
+
+| Variable or credential | Required | Used by |
+| --- | --- | --- |
+| `DATABASE_URL` | Yes | Qube API and migrations; PostgreSQL connection URL. |
+| `JWT_ACCESS_SECRET` | Yes | API JWT signing and web session verification. |
+| `JWT_REFRESH_SECRET` | Yes | Refresh-token signing. |
+| `PROJECT_JWT_SECRET` | Yes | Project API token signing. |
+| `INVITE_SECRET` | Yes | Organization invite tokens. |
+| `WEB_URL` | Yes | Dashboard origin for CORS and auth redirects. |
+| `PUBLIC_API_URL` | Yes | Browser API endpoint and public links. Set it to the API’s externally reachable URL. |
+| `API_URL` | Internal | Server-side web-to-API requests; set by Compose to the API in the same container. |
+| `REALTIME_DATABASE_URL` | Optional | Direct/unpooled PostgreSQL URL for LISTEN/NOTIFY when `DATABASE_URL` is pooled. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL` | Optional | Google OAuth. Register the callback URL with Google. |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_CALLBACK_URL` | Optional | GitHub OAuth. Register the callback URL with GitHub. |
+| `RESEND_API_KEY` | Optional | Email delivery for organization invitations. Without it, email invitations are unavailable. |
+| `UPLOADTHING_TOKEN` | Optional for launch; required for file upload, deletion, and signed storage URLs | UploadThing storage API credential used by `UTApi`. |
+| `WEB_HOST_PORT`, `API_HOST_PORT` | Optional | Host ports, default `3001` and `3000`; both bind to `127.0.0.1`. |
+| `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_IN` | Optional | Token lifetimes, default `15m` and `7d`. |
+
+See [.env.example](.env.example) for the complete Compose environment template. The installer creates the four required application secrets. Keep the Neon API key out of `.qube/.env`; the installer only holds it in a temporary mode-`0600` curl config while making the discovery request.
+
+The audit found `NEXT_PUBLIC_QUBE_*` names in SDK examples but no runtime reads of those values in the Qube dashboard or API. They are not installer requirements. `UPLOADTHING_TOKEN` is used by the API’s UploadThing client and is collected as an optional credential for file storage functionality.
 
 ## Lifecycle
 
@@ -23,48 +58,22 @@ The configuration is stored in `.qube/.env` with mode 0600. Do not commit it. Th
 ./scripts/qube stop
 ./scripts/qube restart
 ./scripts/qube status
-./scripts/qube logs [api|web]
+./scripts/qube logs
 ./scripts/qube update
 ./scripts/qube backup [backup.dump]
 ./scripts/qube restore backup.dump
 ./scripts/qube uninstall
 ```
 
-Backup and restore require PostgreSQL client utilities (`pg_dump`, `pg_restore`). Backups contain Qube's metadata and the project schemas in the configured database. Restore prompts before replacing database objects. Uninstall stops and removes containers while leaving the external database untouched. Re-running `install` never overwrites `.qube/.env`.
-
-## Configuration
-
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `DATABASE_URL` | Yes | PostgreSQL URL for Qube metadata and project schemas. Keep the database role least-privileged. |
-| `REALTIME_DATABASE_URL` | No | Direct, unpooled PostgreSQL URL for LISTEN/NOTIFY if the main URL is pooled. |
-| `WEB_PORT` | No | Local dashboard port; default `3001`. |
-| `API_PORT` | No | Local API port; default `3000`. |
-| `PUBLIC_API_URL` | No | Browser-visible API URL, baked into the web build; default `http://localhost:3000/api`. |
-| `JWT_ACCESS_SECRET` | Yes | Secret used to sign access tokens. |
-| `JWT_REFRESH_SECRET` | Yes | Secret used to sign refresh tokens. |
-| `PROJECT_JWT_SECRET` | Yes | Secret used for project API keys. |
-| `INVITE_SECRET` | Yes | Secret used for organization invites. |
-| `JWT_ACCESS_EXPIRES_IN` | No | Access token lifetime; default `15m`. |
-| `JWT_REFRESH_EXPIRES_IN` | No | Refresh token lifetime; default `7d`. |
-
-The installer generates 256-bit random secrets for the four required application secrets. Optional OAuth and email delivery settings are not configured by the installer; see the root README environment section.
-
-## Remote deployment
-
-The checked-in Compose file binds both ports to loopback. To serve Qube remotely, put a TLS reverse proxy in front of the dashboard and API, configure `WEB_URL` and build-time `PUBLIC_API_URL` to the public HTTPS origins, and explicitly change the port bindings in a reviewed Compose override. Restrict firewall access to the reverse proxy. Do not expose the database URL or Docker socket to the web container. Use HTTPS so authentication cookies remain protected.
-
-The Dockerfiles build from the local source tree. This repository does not currently publish signed, versioned Qube images or a remote one-line installer URL; production image provenance and release automation remain follow-up work.
+Backups and restores run `pg_dump`/`pg_restore` inside the Qube container so the database URI is not placed in the host process arguments. Restore prompts before modifying database objects. Uninstall removes the container and image-managed state but leaves the external PostgreSQL database unchanged.
 
 ## Troubleshooting
 
-- **Docker daemon unavailable:** start Docker Engine/Desktop and verify `docker info` works for the installing user.
-- **Compose plugin missing:** install Docker Compose v2 and verify `docker compose version`.
-- **Migration or API health check fails:** run `./scripts/qube logs api`; verify DNS, TLS, database permissions, and `DATABASE_URL`.
-- **Realtime connects but does not receive changes:** set `REALTIME_DATABASE_URL` to an unpooled connection and ensure the project table has realtime triggers enabled.
-- **Browser cannot reach API:** the web bundle needs the browser-visible `PUBLIC_API_URL`; after changing it, run `./scripts/qube update` to rebuild the web image.
-- **Neon selection fails:** verify the key and project access, then check the database and role names. Management API access does not itself grant SQL privileges to the selected role.
+- **Docker unavailable:** start the daemon and verify `docker info`; install Compose v2 if `docker compose version` fails.
+- **Migration or health check failure:** run `./scripts/qube logs`; check URI encoding, database DNS/TLS, and the role’s migration permissions.
+- **Realtime listener cannot connect:** use a direct, unpooled `REALTIME_DATABASE_URL` and ensure the database permits connections from this host.
+- **Browser cannot reach the API:** check `PUBLIC_API_URL`, its host port, and proxy/firewall rules; rebuild using `./scripts/qube update` after changing the public URL.
+- **OAuth redirect mismatch:** the callback URL must exactly match the provider console and use the public API origin.
+- **Neon URI discovery fails:** check the Neon key and project access. The selected SQL role still needs database privileges independently of the Neon management key.
 
-## Observatory telemetry and security
-
-Telemetry is stored in Qube's PostgreSQL database with a 90-day retention cleanup. Project REST request data, Qube SQL editor duration/status and normalized SHA-256 query fingerprints, and Realtime connection/subscription/delivery counts are collected. Raw parameters and query results are not put in telemetry. Existing SQL editor `query_history` continues to store SQL text for its existing history feature; use database access controls accordingly. Metrics are unavailable until telemetry events have been collected. Database size and table counts come from catalog visibility, and are not Neon compute or infrastructure usage metrics.
+Qube telemetry records only instrumented Qube activity. It does not expose Neon compute metrics. SQL telemetry stores sanitized query fingerprints; existing SQL editor history has its separate retention and access behavior.

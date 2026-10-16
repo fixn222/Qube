@@ -355,6 +355,7 @@ Configure environment variables for both the API and Web applications.
 PORT=3000
 WEB_URL=http://localhost:3001
 API_URL=http://localhost:3000/api
+PUBLIC_API_URL=http://localhost:3000/api
 DATABASE_URL=postgresql://user:pass@host/db?sslmode=require
 REALTIME_DATABASE_URL=postgresql://user:pass@host/db?sslmode=require # Optional direct URL (unpooled) for LISTEN/NOTIFY
 JWT_ACCESS_SECRET=your_jwt_access_secret

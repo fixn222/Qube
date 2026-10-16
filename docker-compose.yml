@@ -1,57 +1,50 @@
 services:
-  api:
+  qube:
     build:
       context: .
-      dockerfile: apps/api/Dockerfile
-    restart: unless-stopped
-    environment:
-      PORT: 3000
-      WEB_URL: ${WEB_URL:-http://localhost:3001}
-      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
-      REALTIME_DATABASE_URL: ${REALTIME_DATABASE_URL:-}
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in .env}
-      PROJECT_JWT_SECRET: ${PROJECT_JWT_SECRET:?Set PROJECT_JWT_SECRET in .env}
-      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
-      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
-      INVITE_SECRET: ${INVITE_SECRET:?Set INVITE_SECRET in .env}
-      RESEND_API_KEY: ${RESEND_API_KEY:-}
-    ports:
-      - "127.0.0.1:${API_PORT:-3000}:3000"
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
-      interval: 20s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
-    stop_grace_period: 20s
-    init: true
-    security_opt:
-      - no-new-privileges:true
-
-  web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
+      dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3000/api}
+    image: qube:local
+    container_name: ${QUBE_CONTAINER_NAME:-qube}
     restart: unless-stopped
-    depends_on:
-      api:
-        condition: service_healthy
+    init: true
     environment:
-      API_URL: http://api:3000/api
-      NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3000/api}
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .qube/.env}
+      REALTIME_DATABASE_URL: ${REALTIME_DATABASE_URL:-}
+      PORT: 3000
+      API_URL: http://127.0.0.1:3000/api
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3000/api}
+      WEB_URL: ${WEB_URL:-http://localhost:3001}
+      WEB_PORT: 3001
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .qube/.env}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in .qube/.env}
+      PROJECT_JWT_SECRET: ${PROJECT_JWT_SECRET:?Set PROJECT_JWT_SECRET in .qube/.env}
+      INVITE_SECRET: ${INVITE_SECRET:?Set INVITE_SECRET in .qube/.env}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_CALLBACK_URL: ${GITHUB_CALLBACK_URL:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      UPLOADTHING_TOKEN: ${UPLOADTHING_TOKEN:-}
     ports:
-      - "127.0.0.1:${WEB_PORT:-3001}:3000"
+      - "127.0.0.1:${API_HOST_PORT:-3000}:3000"
+      - "127.0.0.1:${WEB_HOST_PORT:-3001}:3001"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"]
+      test:
+        - CMD
+        - node
+        - -e
+        - "Promise.all([fetch('http://127.0.0.1:3000/api/health'),fetch('http://127.0.0.1:3001')]).then(rs=>process.exit(rs.every(r=>r.ok)?0:1)).catch(()=>process.exit(1))"
       interval: 20s
       timeout: 5s
       retries: 5
-      start_period: 60s
-    stop_grace_period: 20s
-    init: true
+      start_period: 90s
+    stop_grace_period: 30s
     security_opt:
       - no-new-privileges:true
-

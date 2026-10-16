@@ -2,183 +2,227 @@
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TEMP_SECRET_FILE=""
 CONFIG_DIR="${QUBE_CONFIG_DIR:-$ROOT_DIR/.qube}"
 ENV_FILE="$CONFIG_DIR/.env"
 COMPOSE_FILE="$ROOT_DIR/docker-compose.yml"
 PROJECT_NAME="${QUBE_COMPOSE_PROJECT:-qube}"
+TEMP_FILE=""
 
 compose() {
   docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
 
 fail() { printf 'Qube: %s\n' "$1" >&2; exit 1; }
-cleanup_secret_file() { [[ -z "$TEMP_SECRET_FILE" ]] || rm -f "$TEMP_SECRET_FILE"; }
-trap cleanup_secret_file EXIT
+cleanup() { [[ -z "$TEMP_FILE" ]] || rm -f "$TEMP_FILE" "$TEMP_FILE.payload"; }
+trap cleanup EXIT
 prompt_secret() { local value; read -r -s -p "$1" value; printf '\n' >&2; printf '%s' "$value"; }
 random_secret() { openssl rand -hex 32; }
+yes_no() { [[ "${1:-}" =~ ^[Yy]$ ]]; }
+dotenv_quote() { local value="$1"; value=${value//\'/\\\'}; printf "'%s'" "$value"; }
 
-require_docker() {
+check_prerequisites() {
+  local arch
+  command -v docker >/dev/null 2>&1 || fail "Docker Engine is missing. Install Docker Desktop or Engine."
+  docker info >/dev/null 2>&1 || fail "Docker is installed but unavailable. Start the daemon and verify your account can run docker info."
+  docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required. Install the Compose plugin."
   command -v openssl >/dev/null 2>&1 || fail "OpenSSL is required to generate application secrets."
-  command -v docker >/dev/null 2>&1 || fail "Docker Engine is missing. Install Docker Desktop or Docker Engine, then retry."
-  docker info >/dev/null 2>&1 || fail "Docker is installed but the daemon is unavailable. Start Docker and ensure your user can access it."
-  docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is missing. Install the Docker Compose plugin."
+  command -v curl >/dev/null 2>&1 || fail "curl is required to complete administrator setup and health checks."
+  command -v jq >/dev/null 2>&1 || fail "jq is required to safely prepare the initial administrator request."
+  arch="$(uname -m)"
+  case "$arch" in x86_64|aarch64|arm64) ;; *) fail "Unsupported architecture: $arch" ;; esac
 }
 
-write_neon_connection() {
-  command -v curl >/dev/null 2>&1 || fail "curl is required for Neon API validation."
-  command -v jq >/dev/null 2>&1 || fail "jq is required for selecting Neon projects."
-  local response projects page cursor count choice project_id project_name db_name role_name branch_id uri_response db_url
-  TEMP_SECRET_FILE="$(mktemp "$CONFIG_DIR/neon-api.XXXXXX")"
-  chmod 600 "$TEMP_SECRET_FILE"
-  local neon_key
-  neon_key="$(prompt_secret 'Neon API key (input hidden): ')"
-  [[ -n "$neon_key" ]] || fail "Neon API key cannot be empty."
-  printf 'header = "Authorization: Bearer %s"\n' "$neon_key" > "$TEMP_SECRET_FILE"
-  unset neon_key
+prompt_database_uri() {
+  local uri
+  printf 'Paste the PostgreSQL connection URI below. Terminal input will remain visible as requested.\n' >&2
+  read -r -p 'DATABASE_URL: ' uri
+  [[ "$uri" == postgres://* || "$uri" == postgresql://* ]] || fail "DATABASE_URL must begin with postgres:// or postgresql://."
+  [[ "$uri" != *$'\n'* && "$uri" != *$'\r'* && "$uri" != *"'"* ]] || fail "Use a single-line URI and percent-encode special characters in the credentials."
+  printf '%s' "$uri"
+}
+
+discover_neon_uri() {
+  command -v curl >/dev/null 2>&1 || fail "curl is required for Neon discovery."
+  command -v jq >/dev/null 2>&1 || fail "jq is required for Neon project selection."
+  local key response projects cursor page count choice project_id project_name branch_id db_name role_name uri_response uri
+  TEMP_FILE="$(mktemp "$CONFIG_DIR/neon-api.XXXXXX")"
+  chmod 600 "$TEMP_FILE"
+  key="$(prompt_secret 'Neon API key (input hidden): ')"
+  [[ "$key" =~ ^[A-Za-z0-9_-]+$ ]] || fail "Neon API key is empty or contains unsupported characters."
+  printf 'header = "Authorization: Bearer %s"\n' "$key" > "$TEMP_FILE"
+  unset key
   projects=""
   cursor=""
   while :; do
     if [[ -n "$cursor" ]]; then
-      response="$(curl --fail --silent --show-error --config "$TEMP_SECRET_FILE" --get --data-urlencode "cursor=$cursor" https://console.neon.tech/api/v2/projects)" || fail "Neon project pagination failed."
+      response="$(curl --fail --silent --show-error --config "$TEMP_FILE" --get --data-urlencode "cursor=$cursor" https://console.neon.tech/api/v2/projects)" || fail "Neon project discovery failed. Check network access and API key permissions."
     else
-      response="$(curl --fail --silent --show-error --config "$TEMP_SECRET_FILE" https://console.neon.tech/api/v2/projects)" || fail "Neon API key validation failed. Check the key and network access."
+      response="$(curl --fail --silent --show-error --config "$TEMP_FILE" https://console.neon.tech/api/v2/projects)" || fail "Neon API key validation failed. Check the key and network access."
     fi
     page="$(jq -r '.projects[] | [.id, (.name // "unnamed"), (.default_branch_id // "")] | @tsv' <<< "$response")"
-    if [[ -n "$page" ]]; then
-      [[ -z "$projects" ]] || projects+=$'\n'
-      projects+="$page"
-    fi
+    if [[ -n "$page" ]]; then [[ -z "$projects" ]] || projects+=$'\n'; projects+="$page"; fi
     cursor="$(jq -r '.pagination.cursor // .cursor // empty' <<< "$response")"
     [[ -n "$cursor" ]] || break
   done
-  [[ -n "$projects" ]] || fail "This Neon account has no projects. Create one in Neon first, then rerun setup."
-  printf '\nNeon projects:\n'
+  [[ -n "$projects" ]] || fail "No Neon projects were found. Create a project in Neon and retry."
+  printf '\nNeon projects:\n' >&2
   count=0
   while IFS=$'\t' read -r project_id project_name branch_id; do
     ((count+=1))
-    printf '  %d) %s (%s)\n' "$count" "$project_name" "$project_id"
+    printf '  %d) %s (%s)\n' "$count" "$project_name" "$project_id" >&2
   done <<< "$projects"
   read -r -p 'Select project number: ' choice
-  [[ "$choice" =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= count)) || fail "Select one of the listed project numbers."
+  [[ "$choice" =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= count)) || fail "Select a listed project number."
   IFS=$'\t' read -r project_id project_name branch_id < <(sed -n "${choice}p" <<< "$projects")
   read -r -p 'Database name [neondb]: ' db_name; db_name="${db_name:-neondb}"
   read -r -p 'Database role [neondb_owner]: ' role_name; role_name="${role_name:-neondb_owner}"
   [[ -n "$branch_id" ]] || read -r -p 'Branch ID: ' branch_id
-  uri_response="$(curl --fail --silent --show-error --config "$TEMP_SECRET_FILE" --get \
+  uri_response="$(curl --fail --silent --show-error --config "$TEMP_FILE" --get \
     --data-urlencode "database_name=$db_name" --data-urlencode "role_name=$role_name" \
     --data-urlencode "branch_id=$branch_id" \
-    "https://console.neon.tech/api/v2/projects/$project_id/connection_uri")" || fail "Neon could not return a connection URI. Verify the database and role names."
-  db_url="$(jq -r '.uri // .connection_uri // empty' <<< "$uri_response")"
-  rm -f "$TEMP_SECRET_FILE"
-  TEMP_SECRET_FILE=""
-  [[ "$db_url" == postgres* ]] || fail "Neon returned an unexpected connection URI response."
-  printf '%s' "$db_url"
+    "https://console.neon.tech/api/v2/projects/$project_id/connection_uri")" || fail "Neon could not return a URI for the selected database role."
+  uri="$(jq -r '.uri // .connection_uri // empty' <<< "$uri_response")"
+  [[ "$uri" == postgres://* || "$uri" == postgresql://* ]] || fail "Neon returned an invalid PostgreSQL URI."
+  [[ "$uri" != *$'\n'* && "$uri" != *$'\r'* && "$uri" != *"'"* ]] || fail "Neon returned a URI with unsupported characters."
+  rm -f "$TEMP_FILE"
+  TEMP_FILE=""
+  printf '%s' "$uri"
 }
 
-install_qube() {
-  require_docker
-  command -v jq >/dev/null 2>&1 || fail "jq is required for health checks. Install jq, then retry."
-  [[ -f "$COMPOSE_FILE" ]] || fail "Compose file is missing at $COMPOSE_FILE. Run this command from a Qube source or release bundle."
-  [[ ! -e "$ENV_FILE" ]] || fail "Configuration already exists at $ENV_FILE. Use start/status or back it up before changing configuration."
-  mkdir -p "$CONFIG_DIR"
-  chmod 700 "$CONFIG_DIR"
-  local os arch db_url admin_email admin_name admin_password port public_api temp_payload
-  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
-  arch="$(uname -m)"
-  case "$arch" in x86_64|aarch64|arm64) ;; *) fail "Unsupported architecture: $arch" ;; esac
-  printf 'Installing Qube source build for %s/%s.\n' "$os" "$arch"
-  if [[ -t 0 ]]; then
-    read -r -p 'Connect using Neon project discovery? [y/N] ' use_neon
-  else use_neon=n; fi
-  if [[ "$use_neon" =~ ^[Yy]$ ]]; then
-    db_url="$(write_neon_connection)"
-  else
-    db_url="$(prompt_secret 'PostgreSQL DATABASE_URL (input hidden): ')"
-  fi
-  [[ "$db_url" == postgres* ]] || fail "Enter a PostgreSQL connection URL."
-  printf 'The API will validate database access by applying migrations during startup.\n'
-  read -r -p 'Dashboard port [3001]: ' port; port="${port:-3001}"
-  [[ "$port" =~ ^[0-9]+$ ]] && ((port > 0 && port < 65536)) || fail "Enter a valid TCP port."
-  public_api="http://localhost:3000/api"
-  read -r -p 'Initial administrator email: ' admin_email
-  read -r -p 'Initial administrator name: ' admin_name
-  admin_password="$(prompt_secret 'Initial administrator password (minimum 8 chars): ')"
-  [[ "$admin_password" == ????????* ]] || fail "Administrator password must be at least 8 characters."
+write_config() {
+  local database_uri="$1" realtime_uri="$2" web_port="$3" api_port="$4" web_url="$5" public_api_url="$6"
   umask 077
-  cat > "$ENV_FILE" <<EOF
-DATABASE_URL=$db_url
-WEB_PORT=$port
-API_PORT=3000
-PUBLIC_API_URL=$public_api
-WEB_URL=http://localhost:$port
-JWT_ACCESS_SECRET=$(random_
-
+  {
+    printf 'DATABASE_URL=%s\n' "$(dotenv_quote "$database_uri")"
+    [[ -z "$realtime_uri" ]] || printf 'REALTIME_DATABASE_URL=%s\n' "$(dotenv_quote "$realtime_uri")"
+    cat <<EOF
+WEB_HOST_PORT=$web_port
+API_HOST_PORT=$api_port
+WEB_URL=$web_url
+PUBLIC_API_URL=$public_api_url
+JWT_ACCESS_SECRET=$(random_secret)
 JWT_REFRESH_SECRET=$(random_secret)
 PROJECT_JWT_SECRET=$(random_secret)
 INVITE_SECRET=$(random_secret)
 JWT_ACCESS_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
 EOF
+    printf 'GOOGLE_CLIENT_ID=%s\nGOOGLE_CLIENT_SECRET=%s\nGOOGLE_CALLBACK_URL=%s\n' "$(dotenv_quote "$google_client_id")" "$(dotenv_quote "$google_client_secret")" "$(dotenv_quote "$public_api_url/api/auth/google/callback")"
+    printf 'GITHUB_CLIENT_ID=%s\nGITHUB_CLIENT_SECRET=%s\nGITHUB_CALLBACK_URL=%s\n' "$(dotenv_quote "$github_client_id")" "$(dotenv_quote "$github_client_secret")" "$(dotenv_quote "$public_api_url/api/auth/github/callback")"
+    printf 'RESEND_API_KEY=%s\nUPLOADTHING_TOKEN=%s\n' "$(dotenv_quote "$resend_api_key")" "$(dotenv_quote "$uploadthing_token")"
+  } > "$ENV_FILE"
   chmod 600 "$ENV_FILE"
-  unset db_url
-  printf '\nBuilding Qube containers and applying migrations...\n'
-  compose up -d --build
-  wait_for_health
-  temp_payload="$(mktemp "$CONFIG_DIR/admin.XXXXXX")"
-  TEMP_SECRET_FILE="$temp_payload"
-  chmod 600 "$temp_payload"
-  jq -n --arg email "$admin_email" --arg name "$admin_name" --arg password "$admin_password" '{email:$email,name:$name,password:$password}' > "$temp_payload"
-  unset admin_password
-  if ! curl --fail --silent --show-error -H 'Content-Type: application/json' --data-binary "@$temp_payload" "http://127.0.0.1:3000/api/auth/register" >/dev/null; then
-    rm -f "$temp_payload"
-    TEMP_SECRET_FILE=""
-    fail "Containers are healthy but administrator registration failed. See './scripts/qube logs api'."
-  fi
-  rm -f "$temp_payload"
-  TEMP_SECRET_FILE=""
-  printf '\nQube is ready at http://localhost:%s\n' "$port"
-  printf 'Log in using the administrator account you created. Config is protected at %s\n' "$ENV_FILE"
 }
 
 wait_for_health() {
-  local attempt
-  for attempt in $(seq 1 60); do
-    if compose ps --format json | jq -e 'if type == "array" then any(.[]; .Service == "api" and .Health == "healthy") else .Service == "api" and .Health == "healthy" end' >/dev/null 2>&1 && \
-       compose ps --format json | jq -e 'if type == "array" then any(.[]; .Service == "web" and .Health == "healthy") else .Service == "web" and .Health == "healthy" end' >/dev/null 2>&1; then return 0; fi
+  local attempt container health
+  for ((attempt=1; attempt<=75; attempt++)); do
+    container="$(compose ps -q qube)"
+    if [[ -n "$container" ]]; then
+      health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container" 2>/dev/null || true)"
+      [[ "$health" == healthy ]] && return 0
+      [[ "$health" == unhealthy || "$health" == exited || "$health" == dead ]] && break
+    fi
     sleep 2
   done
-  compose ps
-  fail "Qube did not become healthy. Inspect logs with './scripts/qube logs'."
+  compose ps >&2 || true
+  fail "Qube did not become healthy. Review './scripts/qube logs' for diagnostics."
 }
 
-need_install() { [[ -f "$ENV_FILE" ]] || fail "No installation at $ENV_FILE. Run './scripts/qube install' first."; }
+install_qube() {
+  [[ -f "$COMPOSE_FILE" && -f "$ROOT_DIR/Dockerfile" ]] || fail "Run the installer from the Qube source or release directory."
+  [[ ! -e "$ENV_FILE" ]] || fail "Existing config found at $ENV_FILE. It was left unchanged. Back it up or use the lifecycle commands."
+  mkdir -p "$CONFIG_DIR"
+  chmod 700 "$CONFIG_DIR"
+  check_prerequisites
+  printf 'Installing Qube on %s/%s in one Docker container.\n' "$(uname -s)" "$(uname -m)"
+  local database_uri realtime_uri web_port api_port web_url public_api_url admin_email admin_name admin_password
+  local google_client_id google_client_secret github_client_id github_client_secret resend_api_key uploadthing_token use_neon
+  realtime_uri=""
+  google_client_id=""; google_client_secret=""; github_client_id=""; github_client_secret=""; resend_api_key=""; uploadthing_token=""
+  if [[ -t 0 ]]; then read -r -p 'Discover an existing Neon project? [y/N] ' use_neon; else use_neon=n; fi
+  if yes_no "$use_neon"; then database_uri="$(discover_neon_uri)"; else database_uri="$(prompt_database_uri)"; fi
+  if [[ -t 0 ]]; then
+    read -r -p 'Add a separate direct PostgreSQL URI for Realtime LISTEN/NOTIFY? [y/N] ' use_realtime
+    if yes_no "$use_realtime"; then realtime_uri="$(prompt_database_uri)"; fi
+  fi
+  read -r -p 'Dashboard host port [3001]: ' web_port; web_port="${web_port:-3001}"
+  read -r -p 'API host port [3000]: ' api_port; api_port="${api_port:-3000}"
+  [[ "$web_port" =~ ^[0-9]+$ ]] && ((web_port > 0 && web_port < 65536)) || fail "Enter a valid dashboard TCP port."
+  [[ "$api_port" =~ ^[0-9]+$ ]] && ((api_port > 0 && api_port < 65536)) || fail "Enter a valid API TCP port."
+  ((web_port != api_port)) || fail "Dashboard and API host ports must be different."
+  read -r -p "Dashboard URL [http://localhost:$web_port]: " web_url; web_url="${web_url:-http://localhost:$web_port}"
+  read -r -p "Public API URL [http://localhost:$api_port/api]: " public_api_url; public_api_url="${public_api_url:-http://localhost:$api_port/api}"
+  web_url="${web_url%/}"
+  public_api_url="${public_api_url%/}"
+  [[ "$web_url" =~ ^https?://[^/]+$ ]] || fail "Dashboard URL must be an HTTP(S) origin without a path."
+  [[ "$public_api_url" =~ ^https?://[^/]+/api$ ]] || fail "Public API URL must be an HTTP(S) URL ending in /api."
+  if [[ -t 0 ]]; then
+    read -r -p 'Configure optional OAuth/email credentials now? [y/N] ' use_optional
+    if yes_no "$use_optional"; then
+      read -r -p 'Google OAuth client ID (blank to skip): ' google_client_id
+      [[ -z "$google_client_id" ]] || google_client_secret="$(prompt_secret 'Google OAuth client secret: ')"
+      read -r -p 'GitHub OAuth client ID (blank to skip): ' github_client_id
+      [[ -z "$github_client_id" ]] || github_client_secret="$(prompt_secret 'GitHub OAuth client secret: ')"
+      resend_api_key="$(prompt_secret 'Resend API key (blank to skip email invites): ')"
+      uploadthing_token="$(prompt_secret 'UploadThing token (blank to disable file storage operations): ')"
+    fi
+  fi
+  read -r -p 'Initial administrator email: ' admin_email
+  read -r -p 'Initial administrator name: ' admin_name
+  admin_password="$(prompt_secret 'Initial administrator password (minimum 8 characters): ')"
+  [[ "$admin_password" == ????????* ]] || fail "Administrator password must be at least 8 characters."
+  write_config "$database_uri" "$realtime_uri" "$web_port" "$api_port" "$web_url" "$public_api_url"
+  unset database_uri realtime_uri google_client_secret github_client_secret resend_api_key uploadthing_token
+  printf '\nBuilding the single Qube image, applying migrations, and starting the container...\n'
+  compose up -d --build
+  wait_for_health
+  TEMP_FILE="$(mktemp "$CONFIG_DIR/admin.XXXXXX")"
+  chmod 600 "$TEMP_FILE"
+  printf '%s' "$admin_password" > "$TEMP_FILE"
+  chmod 600 "$TEMP_FILE"
+  jq -n --arg email "$admin_email" --arg name "$admin_name" --rawfile password "$TEMP_FILE" \
+    '{email:$email,name:$name,password:$password}' > "$TEMP_FILE.payload"
+  chmod 600 "$TEMP_FILE.payload"
+  unset admin_password
+  if ! curl --fail --silent --show-error -H 'Content-Type: application/json' \
+    --data-binary "@$TEMP_FILE.payload" "http://127.0.0.1:$api_port/api/auth/register" >/dev/null; then
+    fail "Container is healthy but administrator setup failed. Use './scripts/qube logs' and retry only after checking whether the account was created."
+  fi
+  rm -f "$TEMP_FILE" "$TEMP_FILE.payload"; TEMP_FILE=""
+  printf '\nQube is ready at %s\n' "$web_url"
+  printf 'API endpoint: %s\nConfig file: %s (mode 600)\n' "$public_api_url" "$ENV_FILE"
+}
+
+need_install() { [[ -f "$ENV_FILE" ]] || fail "No Qube config at $ENV_FILE. Run './scripts/qube install' first."; }
+check_config_permissions() { [[ "$(stat -c '%a' "$ENV_FILE" 2>/dev/null || stat -f '%Lp' "$ENV_FILE")" == 600 ]] || fail "Config file permissions must be 600. Run chmod 600 '$ENV_FILE'."; }
 
 command_name="${1:-help}"
 case "$command_name" in
   install) install_qube ;;
-  start) require_docker; need_install; compose up -d ;;
-  stop) require_docker; need_install; compose stop ;;
-  restart) require_docker; need_install; compose restart ;;
-  status) require_docker; need_install; compose ps ;;
-  logs) require_docker; need_install; shift; compose logs --tail=200 -f "$@" ;;
-  update) require_docker; need_install; compose up -d --build ;;
+  start) check_prerequisites; need_install; check_config_permissions; compose up -d ;;
+  stop) check_prerequisites; need_install; check_config_permissions; compose stop ;;
+  restart) check_prerequisites; need_install; check_config_permissions; compose restart ;;
+  status) check_prerequisites; need_install; check_config_permissions; compose ps ;;
+  logs) check_prerequisites; need_install; check_config_permissions; shift; compose logs --tail=200 -f qube "$@" ;;
+  update) check_prerequisites; need_install; check_config_permissions; compose up -d --build ;;
   backup)
-    require_docker; need_install
+    check_prerequisites; need_install; check_config_permissions
     backup_file="${2:-$CONFIG_DIR/backup-$(date +%Y%m%d-%H%M%S).dump}"
-    pg_dump --format=custom --no-owner "$(sed -n 's/^DATABASE_URL=//p' "$ENV_FILE")" --file="$backup_file"
+    mkdir -p "$(dirname "$backup_file")"
+    container="$(compose ps -q qube)"; [[ -n "$container" ]] || fail "Qube is not running. Start it before creating a backup."
+    docker exec "$container" sh -c 'pg_dump --format=custom --no-owner "$DATABASE_URL"' > "$backup_file"
     chmod 600 "$backup_file"; printf 'Backup written to %s\n' "$backup_file" ;;
   restore)
-    require_docker; need_install
+    check_prerequisites; need_install; check_config_permissions
     [[ -f "${2:-}" ]] || fail "Usage: ./scripts/qube restore BACKUP.dump"
-    read -r -p 'Restore will replace database objects in the target database. Type RESTORE to continue: ' confirm
+    read -r -p 'Restore may replace database objects. Type RESTORE to continue: ' confirm
     [[ "$confirm" == RESTORE ]] || fail "Restore cancelled."
-    pg_restore --clean --if-exists --no-owner --dbname="$(sed -n 's/^DATABASE_URL=//p' "$ENV_FILE")" "$2" ;;
+    container="$(compose ps -q qube)"; [[ -n "$container" ]] || fail "Qube must be running to restore."
+    docker exec -i "$container" sh -c 'pg_restore --clean --if-exists --no-owner --dbname="$DATABASE_URL" -' < "$2" ;;
   uninstall)
-    require_docker; need_install
-    printf 'Stopping containers and removing the Qube source build (database remains untouched).\n'
+    check_prerequisites; need_install; check_config_permissions
+    printf 'Stopping and removing the Qube container. External PostgreSQL data is untouched.\n'
     compose down ;;
-  *)
-    printf 'Usage: ./scripts/qube {install|start|stop|restart|status|logs|update|backup|restore FILE|uninstall}\n'
-    ;;
+  *) printf 'Usage: ./scripts/qube {install|start|stop|restart|status|logs|update|backup|restore FILE|uninstall}\n' ;;
 esac

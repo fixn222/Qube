@@ -101,7 +101,10 @@ export class ProjectService {
 
     const projectSlug = this.generateProjectSlug(dto.name);
     const dbSchema = this.generateDbSchema();
-    const projectUrl = `${this.configService.get<string>('API_URL')}/projects/${projectSlug}`;
+    const publicApiUrl =
+      this.configService.get<string>('PUBLIC_API_URL') ??
+      this.configService.get<string>('API_URL');
+    const projectUrl = `${publicApiUrl}/projects/${projectSlug}`;
 
     await this.provisionSchema(dbSchema);
 
