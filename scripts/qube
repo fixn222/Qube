@@ -105,6 +105,11 @@ discover_neon_uri() {
 
 write_config() {
   local database_uri="$1" realtime_uri="$2" web_port="$3" api_port="$4" web_url="$5" public_api_url="$6"
+  # pg-connection-string currently treats `require` as `verify-full` and warns
+  # that its semantics will change in a future major version. Keep TLS
+  # certificate verification explicit in the persisted Neon URIs.
+  database_uri="${database_uri/sslmode=require/sslmode=verify-full}"
+  realtime_uri="${realtime_uri/sslmode=require/sslmode=verify-full}"
   umask 077
   {
     printf 'DATABASE_URL=%s\n' "$(dotenv_quote "$database_uri")"

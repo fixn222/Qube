@@ -10,7 +10,7 @@ Requirements on the host: Docker Engine, Docker Compose v2, `curl`, `jq`, and Op
 ./scripts/qube install
 ```
 
-The installer checks Docker and architecture, then asks for a Neon connection URI. For the manual URI prompt, terminal input is visible while typing or pasting. The hostname must end in `.neon.tech` and the query must include `sslmode=require` or `sslmode=verify-full`; percent-encode special characters in credentials. Do not share terminal recordings or transcripts that contain the URI. It is stored in `.qube/.env`, mode `0600`, under a mode `0700` directory.
+The installer checks Docker and architecture, then asks for a Neon connection URI. For the manual URI prompt, terminal input is visible while typing or pasting. The hostname must end in `.neon.tech` and the query must include `sslmode=require` or `sslmode=verify-full`; percent-encode special characters in credentials. The installer stores either accepted form as `sslmode=verify-full`, preserving certificate verification and avoiding the `pg-connection-string` compatibility warning. Do not share terminal recordings or transcripts that contain the URI. It is stored in `.qube/.env`, mode `0600`, under a mode `0700` directory.
 
 You can instead choose Neon discovery. The installer hides the Neon management API key, validates it with Neon, lists projects, and requests a connection URI for the selected project, database, role, and branch. It does not create Neon resources. Neon management credentials and SQL credentials are separate permissions.
 

@@ -1,6 +1,5 @@
 const { spawn, spawnSync } = require('node:child_process');
 
-const root = '/app';
 const mode = process.argv[2] || 'all';
 
 if (!['all', 'migrate', 'start'].includes(mode)) {
@@ -11,9 +10,9 @@ if (!['all', 'migrate', 'start'].includes(mode)) {
 if (mode !== 'start') {
   console.log('Running Qube database migrations...');
   const migration = spawnSync(
-    'pnpm',
-    ['--filter', 'api', 'db:migrate'],
-    { cwd: root, env: process.env, stdio: 'inherit' },
+    process.execPath,
+    ['/app/scripts/run-qube-migrations.cjs'],
+    { cwd: '/app', env: process.env, stdio: 'inherit' },
   );
 
   if (migration.error) {

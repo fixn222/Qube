@@ -24,13 +24,9 @@ RUN pnpm --filter qube-js build \
 
 FROM node:22-alpine AS runner
 ENV NODE_ENV=production
-ENV PNPM_HOME=/pnpm
-ENV PATH=$PNPM_HOME:$PATH
 ENV PORT=3000
 ENV WEB_PORT=3001
-RUN apk add --no-cache dumb-init postgresql-client \
-  && corepack enable \
-  && corepack prepare pnpm@11.3.0 --activate
+RUN apk add --no-cache dumb-init postgresql-client
 WORKDIR /app
 COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
@@ -46,6 +42,7 @@ COPY --from=builder /app/apps/api/drizzle.config.ts ./apps/api/drizzle.config.ts
 COPY --from=builder /app/apps/api/src/db/schema ./apps/api/src/db/schema
 COPY --from=builder /app/packages ./packages
 COPY scripts/run-qube-container.cjs ./scripts/run-qube-container.cjs
+COPY scripts/run-qube-migrations.cjs ./scripts/run-qube-migrations.cjs
 RUN chown -R node:node /app
 USER node
 EXPOSE 3000 3001

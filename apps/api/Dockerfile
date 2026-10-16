@@ -48,4 +48,4 @@ EXPOSE 3000
 # Run `pnpm db:migrate` once as a deployment/release step before starting API
 # replicas. Keeping migrations out of this command avoids concurrent migration
 # attempts when the API is scaled or restarted.
-CMD ["pnpm", "start:prod"]
+CMD ["node", "dist/src/main.js"]
